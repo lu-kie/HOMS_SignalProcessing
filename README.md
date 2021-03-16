@@ -2,7 +2,7 @@
 HOMS_SignalProcessing is a C++ toolbox with MATLAB wrapper for joint smoothing and partitioning of one-dimensional signals and time series 
 using higher order Mumford-Shah and Potts models.
 
-   - Fast and numerical stable algorithms for solving univariate Mumford-Shah problems of any order
+   - Fast and numerically stable algorithms for solving univariate Mumford-Shah problems of any order
    - The used dynamic programming scheme computes a global minimum
    - Theoretical quadratic runtime guarantee
    - Practical linear runtime by using pruning strategies
