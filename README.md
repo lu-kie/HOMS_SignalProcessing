@@ -54,7 +54,7 @@ sudo apt-get install libarmadillo-dev
 For a test run, run demo.m. 
 demo.m calls the wrapper function higherOrderMumShah1D.m which calls the necessary C++ sources
 
-Arguments of higherOrderMumShah1D.m.m are:
+Arguments of higherOrderMumShah1D are:
  - data: input data array (double)
  - gamma: complexity penalty (larger choice -> fewer segments)
  - beta: smoothing parameter (larger choice -> stronger smoothing; beta=inf -> piecewise polynomial model)
