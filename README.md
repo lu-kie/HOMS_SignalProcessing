@@ -29,7 +29,7 @@ This is an implementation of the algorithms described in the paper
   Recovering a piecewise constant signal from noisy data with the piecewise constant Mumford-Shah model (aka Potts model).
   ![titleimageB](/docs/pcwConstant.png)
   
-  Recovering a piecewise constant signal from noisy data with the piecewise affine-linear Mumford-Shah model.
+  Recovering a piecewise affine-linear signal from noisy data with the piecewise affine-linear Mumford-Shah model.
   ![titleimageC](/docs/pcwLinear.png)
   
   
