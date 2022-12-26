@@ -1,43 +1,85 @@
-#ifndef INTERVAL_H
-#define INTERVAL_H
+#pragma once
+#include "HigherOrderMS_1D.h"
+#include <Eigen/Dense>
 
-#define ARMA_NO_DEBUG
-#include <armadillo>
-
-using namespace arma;
-
-class Interval
+namespace HOMS
 {
-private:
-    int l; //Left bound of discrete interval
-    int r; //Right bound of discrete interval
-    double eps; //Approximation error for interval
-    double beta; // Smoothing penalty of interval
-    vec data; // Interval data
-public:
-    // Getter:
-    int getL();
-    int getR();
-    double getEps();
-    double getBeta();
-    vec getData();
-    // Setter:
-    void setEps(double e);
-    void setL(int left);
-    void setR(int right);
-    void setData(vec data);
-    // Destructor
-    ~Interval();
-    // Constructor for finding an optimal partition
-    Interval(int left, int right, double data_new, const int k, double alpha);
-    // Constructor for the signal reconstruction from a partition
-    Interval(int left, int right, vec y, const int k, double alpha);
-    // Give interval / data length
-    int giveLength();
-    // Add data point to the bottom of the interval for updating the corresp. approximation error
-    void addBottomDataPoint(const int k, mat &C, mat &S, double data_new);
-    // Update associated data i.e. sparse Givens rotate it (for reconstruction process)
-    void givensRotate(double c, double s,int t, int w);
-};
+	struct Interval
+	{
+		/// @brief Constructor for finding an optimal partition
+		/// @param leftBound 
+		/// @param rightBound 
+		/// @param dataPoint 
+		/// @param smoothnessOrder 
+		/// @param smoothnessPenalty 
+		Interval(const int leftBound, const double dataPoint, const int smoothnessOrder, const double smoothnessPenalty)
+			: leftBound(leftBound)
+			, rightBound(leftBound)
+			, smoothnessOrder(smoothnessOrder)
+			, smoothnessPenalty(smoothnessPenalty)
+		{
+			data = Eigen::VectorXd::Zero(smoothnessOrder);
+			if (std::isinf(smoothnessPenalty))
+			{
+				data(0) = dataPoint;
+			}
+			else
+			{
+				data(smoothnessOrder - 1) = dataPoint;
+			}
+		}
 
-#endif
+		/// @brief Constructor for the signal reconstruction from a partition
+		/// @param leftBound 
+		/// @param rightBound 
+		/// @param smoothnessOrder 
+		/// @param smoothnessPenalty 
+		/// @param intervalData 
+		Interval(const int leftBound, const int rightBound, const int smoothnessOrder, const double smoothnessPenalty, const Eigen::VectorXd& intervalData)
+			: leftBound(leftBound)
+			, rightBound(rightBound)
+			, smoothnessOrder(smoothnessOrder)
+			, smoothnessPenalty(smoothnessPenalty)
+		{
+			const auto intervalLength = getLength();
+			if (intervalData.size() != intervalLength)
+			{
+				throw std::invalid_argument("Data and interval must have the same size.");
+			}
+			if (std::isinf(smoothnessPenalty))
+			{
+				data = intervalData;
+			}
+			else
+			{
+				// For the reconstruction process the data vector y must be appended by zeros for piecewise smooth reconstruction
+				data = Eigen::VectorXd::Zero(2 * intervalLength - smoothnessOrder);
+				data.head(intervalLength) = intervalData;
+			}
+		}
+
+		/// @brief Give interval / data length
+		/// @return interval length 
+		int getLength() const;
+
+		/// @brief Append data point to the interval and update the corresp. approximation error. 
+		/// The interval is enlarged by one element.
+		/// @param smoothnessOrder
+		/// @param givensCoeffs 
+		/// @param newDataPoint 
+		void addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint);
+
+		/// @brief Update associated data i.e. sparse Givens rotate it (for reconstruction process)
+		/// @param givensCoeffs 
+		/// @param row 
+		/// @param col 
+		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
+
+		int leftBound;				///< left bound of discrete interval
+		int rightBound;				///< right bound of discrete interval
+		double approxError{ 0.0 };  ///< optimal approximation error within interval
+		int smoothnessOrder;		///< smoothing order
+		double smoothnessPenalty;	///< smoothing penalty
+		Eigen::VectorXd data;		///< data corresponding to the interval
+	};
+}

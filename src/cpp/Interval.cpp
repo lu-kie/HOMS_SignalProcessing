@@ -1,153 +1,122 @@
 #include "Interval.h"
 
-// Function definitions
-Interval::~Interval()
+namespace HOMS
 {
-}
-// Constructur for usage in findBestPartition
-Interval::Interval(int left,int right, double data_new, const int k, double alpha)
-{
-    beta = alpha;
-    l = left;
-    r = right;
-    data = zeros(k);
-    if (std::isinf(beta)){
-        data(0) = data_new;
-    } else{
-        data(k-1) = data_new;
-    }
-    eps = 0.0;
-}
+	int Interval::getLength() const
+	{
+		return rightBound - leftBound + 1;
+	}
 
-// Constructor for usage in reconstructionFromPartition
-Interval::Interval(int left, int right, vec y, const int k, double alpha)
-{
-    beta = alpha;
-    l = left;
-    r = right;
-    int h = giveLength();
-    if (std::isinf(beta)){
-        data = y;
-    } else{
-        // For the reconstruction process the data vector y must be appended by zeros for piecewise smooth reconstruction
-        data = zeros(2*h-k);
-        data.rows(0,h-1) = y;
-    }
-    eps = 0.0;
-}
 
-// Getter
-int Interval::getL()
-{
-    return l;
-}
+	void Interval::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
+	{
+		// Aux variables
+		double data_diff = 0;
+		const auto intervalLength = getLength();
 
-int Interval::getR()
-{
-    return r;
-}
+		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
+		// to the interval data to update the approximation error
+		for (int j = 0; j <= smoothnessOrder; j++)
+		{
+			if ((std::isinf(smoothnessPenalty) && (j == smoothnessOrder || j >= intervalLength))
+				|| (!std::isinf(smoothnessPenalty) && intervalLength < smoothnessOrder)
+				)
+			{
+				// nothing to do: system matrix either remains upper triangular as it that small or
+				// the matrix coefficient must not be eliminated as it is the upper right quadrant
+				break;
+			}
 
-double Interval::getEps()
-{
-    return eps;
-}
+			double pivotRowData;
+			if (j != smoothnessOrder)
+			{
+				pivotRowData = data(j);
+			}
+			else
+			{
+				pivotRowData = newDataPoint;
+			}
 
-double Interval::getBeta()
-{
-    return beta;
-}
+			double eliminatedRowData;
+			if (std::isinf(smoothnessPenalty))
+			{
+				eliminatedRowData = newDataPoint;
+			}
+			else
+			{
+				eliminatedRowData = data_diff;
+			}
 
-vec Interval::getData()
-{
-    return data;
-}
+			// Apply the Givens transform to the data
+			const auto c = givensCoeffs.C(intervalLength, j);
+			const auto s = givensCoeffs.S(intervalLength, j);
+			if (j < smoothnessOrder)
+			{
+				data(j) = c * pivotRowData + s * eliminatedRowData;
+			}
+			else
+			{
+				newDataPoint = c * pivotRowData + s * eliminatedRowData;
+			}
+			if (std::isinf(smoothnessPenalty))
+			{
+				newDataPoint = -s * pivotRowData + c * eliminatedRowData;
+			}
+			else
+			{
+				data_diff = -s * pivotRowData + c * eliminatedRowData;
+			}
+		}
+		// Update the approximation error
+		if (std::isinf(smoothnessPenalty))
+		{
+			approxError += (intervalLength > smoothnessOrder - 1) ? std::pow(newDataPoint, 2) : 0;
+		}
+		else
+		{
+			approxError += (intervalLength > smoothnessOrder - 1) ? std::pow(data_diff, 2) : 0;
+		}
 
-// Setter
-void Interval::setEps(double e)
-{
-    eps = e;
-}
-void Interval::setL(int left)
-{
-    l = left;
-}
-void Interval::setR(int right)
-{
-    r = right;
-}
-void Interval::setData(vec y)
-{
-    data = y;
-}
-// Give interval / data length
-int Interval::giveLength()
-{
-    return r-l+1;
-}
+		// Update the interval length
+		rightBound++;
 
-// Add new data point to the interval and update the approximation error
-void Interval::addBottomDataPoint(const int k, mat &C, mat &S, double data_new)
-{
-    // Aux variables
-    double c,s,f_j,f_r,data_diff=0;
-    int h = giveLength();
+		// Update the stored interval data if necessary
+		if (std::isinf(smoothnessPenalty))
+		{
+			if (intervalLength < smoothnessOrder)
+			{
+				data(intervalLength) = newDataPoint;
+			}
+		}
+		else
+		{
+			if (smoothnessOrder > 1)
+			{
+				data.head(smoothnessOrder - 1) = data.segment(1, smoothnessOrder - 1);
+			}
+			data(smoothnessOrder - 1) = newDataPoint;
+		}
+	}
 
-    // Eliminate the new row
-    for(int j = 0; j <= k; j++) {
-        if (std::isinf(beta) && (j == k || j >= h)){
-            break;
-        }
-        if (!std::isinf(beta) && h < k){
-            break;
-        }
-        c = C(h,j);
-        s = S(h,j);
-        f_j = (j != k) ? data(j) : data_new;
-        f_r = std::isinf(beta) ? data_new : data_diff;
-        // Givens transform data
-        if (j < k){
-            data(j)  = c*f_j + s*f_r;
-        } else{
-            data_new = c*f_j + s*f_r;
-        }
-        if (std::isinf(beta)){
-            data_new  = -s*f_j + c*f_r;
-        } else{
-            data_diff = -s*f_j + c*f_r;
-        }
-    }
-    // Update interval approximation error
-    if (std::isinf(beta)){
-        eps += (h > k-1) ? (data_new*data_new) : 0;
-    } else{
-        eps += (h > k-1) ? (data_diff*data_diff) : 0;
-    }
-    // Update the interval length
-    r++;
-    // Update interval data
-    if(std::isinf(beta)){
-        if (h < k)
-            data(h) = data_new;
-    } else{
-        if (k > 1){
-            data.rows(0,k-2) = data.rows(1,k-1);		
-        }
-        data(k-1) = data_new;
-    }
-}
-
-// Givens rotate data for reconstructionFromPartition
-void Interval::givensRotate(double c, double s,int v, int vv)
-{
-    // Aux variables
-    double f_j = data(v);
-    int h = giveLength();
-    double f_i = std::isinf(beta) ? data(vv) : data(vv+h);
-    // Apply Givens rotation to data vector
-    data(v) = c*f_j+s*f_i;
-    if (std::isinf(beta)){
-        data(vv) = -s*f_j+c*f_i;
-    } else{
-        data(vv+h) = -s*f_j+c*f_i;
-    }
+	void Interval::applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col)
+	{
+		const double pivotRowData = data(col);
+		const auto intervalLength = getLength();
+		const double eliminatedRowData = data(row);//std::isinf(smoothnessPenalty) ? data(row) : data(row + intervalLength);
+		// Apply Givens rotation to data vector
+		double c, s;
+		if (std::isinf(smoothnessPenalty))
+		{
+			c = givensCoeffs.C(row, col);
+			s = givensCoeffs.S(row, col);
+		}
+		else
+		{
+			const int offset = row - intervalLength;
+			c = givensCoeffs.C(row, col - offset);
+			s = givensCoeffs.S(row, col - offset);
+		}
+		data(col) = c * pivotRowData + s * eliminatedRowData;
+		data(row) = -s * pivotRowData + c * eliminatedRowData;
+	}
 }

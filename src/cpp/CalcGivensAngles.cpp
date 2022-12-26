@@ -9,9 +9,6 @@
 	@version 1.0
 */
 
-#include "HigherOrderMS_1D.h"
-
-
 void calcGivensAngles(const int n, const int k, const double beta, mat &C, mat &S)
 {
     C.zeros();
