@@ -100,6 +100,12 @@ namespace HOMS
 
 	void Interval::applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col)
 	{
+		if (std::isinf(smoothnessPenalty) && col >= row)
+		{
+			// nothing to be eliminated in system matrix: do nothing
+			return;
+		}
+
 		const double pivotRowData = data(col);
 		const auto intervalLength = getLength();
 		const double eliminatedRowData = data(row);//std::isinf(smoothnessPenalty) ? data(row) : data(row + intervalLength);

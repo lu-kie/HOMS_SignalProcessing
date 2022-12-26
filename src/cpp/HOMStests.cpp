@@ -220,33 +220,69 @@ namespace HOMS
 
 		auto quadraticRegressionInterval = Interval(leftBound, rightBound, polynomialOrder, smoothnessPenalty, intervalData);
 		const auto quadraticGivensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
-		
+
+		Eigen::MatrixXd Rquadratic = computeSystemMatrix(dataLength, polynomialOrder, smoothnessPenalty);
 		for (int row = 0; row < dataLength; row++)
 		{
 			for (int col = 0; col < polynomialOrder; col++)
 			{
 				quadraticRegressionInterval.applyGivensRotationToData(quadraticGivensCoeffs, row, col);
+				if (col >= row)
+				{
+					continue;
+				}
+				const auto c = quadraticGivensCoeffs.C(row, col);
+				const auto s = quadraticGivensCoeffs.S(row, col);
+				// eliminate matrix entry (row,col)
+				const Eigen::VectorXd pivotRow = Rquadratic.row(col);
+				const Eigen::VectorXd targetRow = Rquadratic.row(row);
+				Rquadratic.row(col) = c * pivotRow + s * targetRow;
+				Rquadratic.row(row) = -s * pivotRow + c * targetRow;
 			}
 		}
+		Eigen::MatrixXd RquadraticUpper = Rquadratic.triangularView<Eigen::Upper>();
+		Eigen::VectorXd quadraticPolyCoeff = RquadraticUpper.colPivHouseholderQr().solve(quadraticRegressionInterval.data);
+		for (int idx = 0; idx < dataLength; idx++)
+		{
+			const auto x = static_cast<double>(idx + 1);
+			const auto computedResult = quadraticPolyCoeff(0) * pow(x, 2) + quadraticPolyCoeff(1) * x + quadraticPolyCoeff(2);
+			EXPECT_NEAR(computedResult, intervalData(idx), 1e-12);
+		}
 
-		intervalData.isApprox(quadraticRegressionInterval.data, 1e-12);
-
-		// fit linear polynomial to parabolic data: linear regression f(x) = 5x-13.33
+		// fit linear polynomial to parabolic data: linear regression f(x) = 5x-8.333 when x=1,...,6
 		polynomialOrder = 2;
 		auto linearRegressionInterval = Interval(leftBound, rightBound, polynomialOrder, smoothnessPenalty, intervalData);
 		const auto linearGivensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
-
+		Eigen::MatrixXd Rlinear = computeSystemMatrix(dataLength, polynomialOrder, smoothnessPenalty);
 		for (int row = 0; row < dataLength; row++)
 		{
 			for (int col = 0; col < polynomialOrder; col++)
 			{
 				linearRegressionInterval.applyGivensRotationToData(linearGivensCoeffs, row, col);
+				if (col >= row)
+				{
+					continue;
+				}
+				const auto c = linearGivensCoeffs.C(row, col);
+				const auto s = linearGivensCoeffs.S(row, col);
+				// eliminate matrix entry (row,col)
+				const Eigen::VectorXd pivotRow = Rlinear.row(col);
+				const Eigen::VectorXd targetRow = Rlinear.row(row);
+				Rlinear.row(col) = c * pivotRow + s * targetRow;
+				Rlinear.row(row) = -s * pivotRow + c * targetRow;
 			}
 		}
 
-		Eigen::VectorXd expectedResultVector = Eigen::VectorXd(dataLength);
-		expectedResultVector << -3.33, 1.67, 6.67, 11.67, 16.67, 21.67;
-		expectedResultVector.isApprox(linearRegressionInterval.data, 1e-12);
+		//std::cout << Rlinear;
+		Eigen::MatrixXd RlinearUpper = Rlinear.triangularView<Eigen::Upper>();
+		Eigen::VectorXd linearPolyCoeff = RlinearUpper.colPivHouseholderQr().solve(linearRegressionInterval.data);
+
+		EXPECT_NEAR(linearPolyCoeff(0), 5, 1e-3);
+		EXPECT_NEAR(linearPolyCoeff(1), -8.333, 1e-3);
 	}
 
+	TEST(HOMS, intervalApplyGivensRotationToDataHigherMS)
+	{
+
+	}
 }
