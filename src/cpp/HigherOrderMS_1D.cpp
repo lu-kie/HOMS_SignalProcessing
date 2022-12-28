@@ -189,10 +189,9 @@ namespace HOMS
 
 	namespace
 	{
-		bool updateIntervalToRightBoundOrEraseIt(std::vector<Interval>& segments, const std::vector<double>& optimalEnergies,
-			const int idx, const Eigen::VectorXd& data, const int rightBound, const GivensCoefficients& givensCoeffs)
+		bool updateIntervalToRightBoundOrEraseIt(Interval& interval, const std::vector<double>& optimalEnergies,
+			const Eigen::VectorXd& data, const int rightBound, const GivensCoefficients& givensCoeffs)
 		{
-			Interval& interval = segments[idx];
 			while (interval.rightBound < rightBound)
 			{
 				const auto currentRightBound = interval.rightBound;
@@ -201,13 +200,12 @@ namespace HOMS
 				if (rightBound > 1 && currentRightBound < rightBound
 					&& optimalEnergies[interval.leftBound - 1] + eps_curr >= optimalEnergies[currentRightBound])
 				{
-					segments.erase(std::next(segments.begin(), idx));
 					return true;
 				}
 				else
 				{
 					// Extend current interval by new data and update its approximation error with Givens rotations
-					interval.addNewDataPoint(givensCoeffs, data[interval.rightBound]);
+					interval.addNewDataPoint(givensCoeffs, data[interval.rightBound + 1]);
 				}
 			}
 			return false;
@@ -216,24 +214,24 @@ namespace HOMS
 		void updateOptimalEnergyForRightBound(std::vector<double>& optimalEnergies, std::vector<int>& jumpsTracker, const Interval& interval, const int dataRightBound, const double jumpPenalty)
 		{
 			// Check if the current interval yields an improved energy value
-			const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 2] + jumpPenalty + interval.approxError;
-			if (optimalEnergyCandidate <= optimalEnergies[dataRightBound - 1])
+			const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 1] + jumpPenalty + interval.approxError;
+			if (optimalEnergyCandidate <= optimalEnergies[dataRightBound])
 			{
-				optimalEnergies[dataRightBound - 1] = optimalEnergyCandidate;
-				jumpsTracker[dataRightBound - 1] = interval.leftBound - 1;
+				optimalEnergies[dataRightBound] = optimalEnergyCandidate;
+				jumpsTracker[dataRightBound] = interval.leftBound - 1;
 			}
 		}
 
 		std::vector<std::pair<int, int>> getPartitioningFromOptimalLastJumps(const std::vector<int>& jumpsTracker)
 		{
 			std::vector<std::pair<int, int>> partitioning;
-			int rightBound = jumpsTracker.size();
+			int rightBound = jumpsTracker.size() - 1;
 			while (true)
 			{
-				const auto leftBound = jumpsTracker.at(rightBound - 1) + 1;
+				const auto leftBound = jumpsTracker.at(rightBound) + 1;
 
 				partitioning.push_back(std::make_pair(leftBound, rightBound));
-				if (leftBound == 1)
+				if (leftBound == 0)
 				{
 					break;
 				}
@@ -255,44 +253,44 @@ namespace HOMS
 
 		// Keep track of the optimal segment boundaries by storing the optimal last jumps for each 
 		// subdata on domains [1..r], r=1..dataLength
-		std::vector<int> jumpsTracker(dataLength, 0);
+		std::vector<int> jumpsTracker(dataLength, -1);
 
 		// container for the candidate segments, i.e., discrete intervals
-		std::vector<Interval> segments;
-		segments.push_back(Interval(2, data(1), smoothnessOrder, smoothnessPenalty));
+		std::list<Interval> segments; // note: erasing from the middle of a list is cheaper than from a vector
+		segments.push_back(Interval(1, data(1), smoothnessOrder, smoothnessPenalty));
 
-		for (int dataRightBound = 2; dataRightBound <= dataLength; dataRightBound++)
+		for (int dataRightBound = 1; dataRightBound < dataLength; dataRightBound++)
 		{
-			// Init with approximation error of single-segment partition, i.e. l=1
-			optimalEnergies[dataRightBound - 1] = optimalEnergiesNoJump[dataRightBound - 1];
+			// Init with approximation error of single-segment partition, i.e. [0..dataRightBound]
+			optimalEnergies[dataRightBound] = optimalEnergiesNoJump[dataRightBound];
 
-			// Loop backwards (required by pruning B) through candidates for the best last jump for data[1..r]
-			for (auto idx = static_cast<int>(segments.size()) - 1; idx >= 0;)
+			// Loop through candidate segments and find the best last jump for data[0..r-1]
+			for (auto iter = segments.begin(); iter != segments.end();)
 			{
-				auto segmentDeleted = false;
-				const Interval& currInterval = segments[idx];
+				Interval& currInterval = *iter;
 				// Update the current interval to match rightBound and apply pruning strategy A if applicable
-				if (updateIntervalToRightBoundOrEraseIt(segments, optimalEnergies, idx, data, dataRightBound, givensCoeffs))
+				if (updateIntervalToRightBoundOrEraseIt(currInterval, optimalEnergies, data, dataRightBound, givensCoeffs))
 				{
+					iter = segments.erase(iter);
 					continue;
 				}
 				else
 				{
-					idx--;
+					iter++;
 				}
 
 				updateOptimalEnergyForRightBound(optimalEnergies, jumpsTracker, currInterval, dataRightBound, jumpPenalty);
 
 				// Pruning strategy B: omit unnecessary computations of approximation errors
-				if (currInterval.approxError + jumpPenalty > optimalEnergies[dataRightBound - 1])
+				if (currInterval.approxError + jumpPenalty > optimalEnergies[dataRightBound])
 				{
 					break;
 				}
 			}
 			// Add the interval with left bound = rightBound to the list of segments
-			if (dataRightBound <= dataLength - 1)
+			if (dataRightBound < dataLength - 1)
 			{
-				segments.push_back(Interval(dataRightBound + 1, data(dataRightBound), smoothnessOrder, smoothnessPenalty));
+				segments.push_front(Interval(dataRightBound + 1, data(dataRightBound + 1), smoothnessOrder, smoothnessPenalty));
 			}
 		}
 

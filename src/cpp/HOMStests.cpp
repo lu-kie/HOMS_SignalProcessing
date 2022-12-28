@@ -412,39 +412,178 @@ namespace HOMS
 		}
 	}
 
-	TEST(HOMS, findBestPartitionHigherOrderPotts)
+	TEST(HOMS, findBestPartitionHigherOrderPcwConstant)
 	{
 		int dataLength = 10;
 		int polynomialOrder = 1;
 		auto smoothnessPenalty = std::numeric_limits<double>::infinity();
-		const auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
 
 		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
 		data << 1, 1, 1, 1, 1, 10, 10, 10, 10, 10;
-		// two segments are optimal
-		double jumpPenalty = 50;
-		auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 
-		EXPECT_EQ(foundPartition.size(), 2);
-		EXPECT_EQ(foundPartition.at(0), std::make_pair(1, 5));
-		EXPECT_EQ(foundPartition.at(1), std::make_pair(6, 10));
+		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
+		{
+			const auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 
-		// single segment is optimal
-		jumpPenalty = 203;
-		foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+			if (jumpPenalty < 202.5)
+			{
+				// two segments are optimal
+				EXPECT_EQ(foundPartition.size(), 2);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+			}
+			else
+			{
+				// single segment is optimal
+				EXPECT_EQ(foundPartition.size(), 1);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+			}
+		}
 
-		EXPECT_EQ(foundPartition.size(), 1);
-		EXPECT_EQ(foundPartition.at(0), std::make_pair(1, 10));
-
-		// single element segments are optimal
+		// single element segments are optimal for zero jumpPenalty
 		data << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
-		jumpPenalty = 0;
-		foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+		double jumpPenalty = 0;
+		auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 
 		EXPECT_EQ(foundPartition.size(), dataLength);
 		for (int i = 0; i < dataLength; i++)
 		{
-			EXPECT_EQ(foundPartition.at(i), std::make_pair(i + 1, i + 1));
+			EXPECT_EQ(foundPartition.at(i), std::make_pair(i, i));
 		}
+
+		// only one segment for constant data 
+		dataLength = 1000;
+		Eigen::VectorXd constantData = 80 * Eigen::VectorXd::Ones(dataLength);
+		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		for (const double& jumpPenalty : { 0.001,0.01,0.1, 1.0,10.0,100.0,1000.0 })
+		{
+			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+			EXPECT_EQ(foundPartition.size(), 1);
+			EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 999));
+		}
+	}
+
+	TEST(HOMS, findBestPartitionHigherOrderPcwQuadratic)
+	{
+		int dataLength = 10;
+		const int polynomialOrder = 3;
+		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
+		auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, -4, -9, -16, -25, -36;
+		const auto noJumpEnergy = computeOptimalEnergiesNoSegmentation(data, polynomialOrder, smoothnessPenalty, givensCoeffs)[dataLength - 1];
+
+		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
+		{
+			const auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+			if (jumpPenalty < noJumpEnergy)
+			{
+				// two segments are optimal
+				EXPECT_EQ(foundPartition.size(), 2);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+			}
+			else
+			{
+				// single segment is optimal
+				EXPECT_EQ(foundPartition.size(), 1);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+			}
+		}
+
+		// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
+		data << 1, -1, 1, -1, 1, -1, 1, -1, 1, -1;
+		double jumpPenalty = 1e-8;
+		auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+		EXPECT_EQ(foundPartition.size(), 4);
+
+		int sumSegmentLengths = 0;
+		for (const auto& segment : foundPartition)
+		{
+			const auto segmentLength = segment.second - segment.first + 1;
+			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
+			sumSegmentLengths += segmentLength;
+		}
+		EXPECT_EQ(sumSegmentLengths, dataLength);
+
+		// only one segment for quadratic data
+		dataLength = 1000;
+		Eigen::VectorXd constantData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
+		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		for (const double& jumpPenalty : { 0.001,0.01,0.1, 1.0,10.0,100.0,1000.0 })
+		{
+			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+			EXPECT_EQ(foundPartition.size(), 1);
+			EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 999));
+		}
+	}
+
+	TEST(HOMS, findBestPartitionHigherOrderMS)
+	{
+		int dataLength = 10;
+		const int smoothnessOrder = 3;
+		auto smoothnessPenalty = 20;
+		auto givensCoeffs = GivensCoefficients(dataLength, smoothnessOrder, smoothnessPenalty);
+
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, -4, -9, -16, -25, -36;
+		const auto noJumpEnergy = computeOptimalEnergiesNoSegmentation(data, smoothnessOrder, smoothnessPenalty, givensCoeffs)[dataLength - 1];
+
+		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
+		{
+			const auto foundPartition = findBestPartition(data, smoothnessOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+			if (jumpPenalty < noJumpEnergy)
+			{
+				// two segments are optimal
+				EXPECT_EQ(foundPartition.size(), 2);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+			}
+			else
+			{
+				// single segment is optimal
+				EXPECT_EQ(foundPartition.size(), 1);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+			}
+		}
+
+		// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
+		data << 1, -1, 1, -1, 1, -1, 1, -1, 1, -1;
+		double jumpPenalty = 1e-8;
+		auto foundPartition = findBestPartition(data, smoothnessOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+		EXPECT_EQ(foundPartition.size(), 4);
+
+		int sumSegmentLengths = 0;
+		for (const auto& segment : foundPartition)
+		{
+			const auto segmentLength = segment.second - segment.first + 1;
+			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
+			sumSegmentLengths += segmentLength;
+		}
+		EXPECT_EQ(sumSegmentLengths, dataLength);
+
+		// only one segment for quadratic data
+		dataLength = 500;
+		Eigen::VectorXd quadraticData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
+
+		for (const double& jumpPenalty : { 0.1,1.0,10.0,100.0,1000.0 })
+		{
+			for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
+			{
+				givensCoeffs = GivensCoefficients(dataLength, smoothnessOrder, smoothnessPenalty);
+				auto errs = computeOptimalEnergiesNoSegmentation(quadraticData, smoothnessOrder, smoothnessPenalty, givensCoeffs);
+
+				foundPartition = findBestPartition(quadraticData, smoothnessOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+				EXPECT_EQ(foundPartition.size(), 1);
+				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, dataLength - 1));
+			}
+		}
+
 	}
 }
