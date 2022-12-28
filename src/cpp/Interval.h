@@ -73,6 +73,14 @@ namespace HOMS
 		/// @param givensCoeffs 
 		/// @param row 
 		/// @param col 
+		/// @param rowOffset 
+		/// @param colOffset
+		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col, const int rowOffset, const int colOffset);
+
+		/// @brief 
+		/// @param givensCoeffs 
+		/// @param row 
+		/// @param col 
 		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
 
 		int leftBound;				///< left bound of discrete interval

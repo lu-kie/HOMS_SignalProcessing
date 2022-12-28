@@ -11,7 +11,7 @@ namespace HOMS
 	void Interval::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
 	{
 		// Aux variables
-		double data_diff = 0;
+		double finiteDifferenceRowData = 0;
 		const auto intervalLength = getLength();
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
@@ -44,12 +44,13 @@ namespace HOMS
 			}
 			else
 			{
-				eliminatedRowData = data_diff;
+				eliminatedRowData = finiteDifferenceRowData;
 			}
 
 			// Apply the Givens transform to the data
 			const auto c = givensCoeffs.C(intervalLength, j);
 			const auto s = givensCoeffs.S(intervalLength, j);
+
 			if (j < smoothnessOrder)
 			{
 				data(j) = c * pivotRowData + s * eliminatedRowData;
@@ -58,13 +59,14 @@ namespace HOMS
 			{
 				newDataPoint = c * pivotRowData + s * eliminatedRowData;
 			}
+
 			if (std::isinf(smoothnessPenalty))
 			{
 				newDataPoint = -s * pivotRowData + c * eliminatedRowData;
 			}
 			else
 			{
-				data_diff = -s * pivotRowData + c * eliminatedRowData;
+				finiteDifferenceRowData = -s * pivotRowData + c * eliminatedRowData;
 			}
 		}
 		// Update the approximation error
@@ -74,7 +76,7 @@ namespace HOMS
 		}
 		else
 		{
-			approxError += (intervalLength > smoothnessOrder - 1) ? std::pow(data_diff, 2) : 0;
+			approxError += (intervalLength > smoothnessOrder - 1) ? std::pow(finiteDifferenceRowData, 2) : 0;
 		}
 
 		// Update the interval length
@@ -100,6 +102,11 @@ namespace HOMS
 
 	void Interval::applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col)
 	{
+		Interval::applyGivensRotationToData(givensCoeffs, row, col, 0, 0);
+	}
+
+	void Interval::applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col, const int rowOffset, const int colOffset)
+	{
 		if (std::isinf(smoothnessPenalty) && col >= row)
 		{
 			// nothing to be eliminated in system matrix: do nothing
@@ -118,9 +125,8 @@ namespace HOMS
 		}
 		else
 		{
-			const int offset = row - intervalLength;
-			c = givensCoeffs.C(row, col - offset);
-			s = givensCoeffs.S(row, col - offset);
+			c = givensCoeffs.C(row - rowOffset, col - colOffset);
+			s = givensCoeffs.S(row - rowOffset, col - colOffset);
 		}
 		data(col) = c * pivotRowData + s * eliminatedRowData;
 		data(row) = -s * pivotRowData + c * eliminatedRowData;

@@ -1,33 +1,31 @@
 #include "HigherOrderMS_1D.h"
+#include "Interval.h"
 #include <limits>
 #include <iostream>
 namespace HOMS
 {
-	/// @brief Compute the convolution of two vectors x,y
-	/// @param x 
-	/// @param y 
-	/// @return convolution of x and y
-	Eigen::VectorXd convolveVectors(const Eigen::VectorXd& x, const Eigen::VectorXd& y)
+	namespace
 	{
-		const auto sizeX = x.size();
-		const auto sizeY = y.size();
-		Eigen::VectorXd conv = Eigen::VectorXd::Zero(sizeX + sizeY - 1);
-		for (int j = 0; j < sizeY; j++)
+		/// @brief Compute the convolution of two vectors x,y
+		/// @param x 
+		/// @param y 
+		/// @return convolution of x and y
+		Eigen::VectorXd convolveVectors(const Eigen::VectorXd& x, const Eigen::VectorXd& y)
 		{
-			for (int i = 0; i < sizeX; i++)
+			const auto sizeX = x.size();
+			const auto sizeY = y.size();
+			Eigen::VectorXd conv = Eigen::VectorXd::Zero(sizeX + sizeY - 1);
+			for (int j = 0; j < sizeY; j++)
 			{
-				conv(j + i) += y(j) * x(i);
+				for (int i = 0; i < sizeX; i++)
+				{
+					conv(j + i) += y(j) * x(i);
+				}
 			}
+			return conv;
 		}
-		return conv;
-
 	}
 
-	/// @brief 
-	/// @param dataLength 
-	/// @param smoothnessOrder 
-	/// @param smoothnessPenalty 
-	/// @return 
 	Eigen::MatrixXd computeSystemMatrix(const int dataLength, const int smoothnessOrder, const double smoothnessPenalty)
 	{
 		if (smoothnessOrder < 1)
@@ -98,10 +96,6 @@ namespace HOMS
 		}
 	}
 
-	/// @brief 
-	/// @param dataLength 
-	/// @param smoothnessOrder 
-	/// @param smoothnessPenalty 
 	GivensCoefficients::GivensCoefficients(const int dataLength, const int smoothnessOrder, const double smoothnessPenalty)
 	{
 		const bool isPiecewisePolynomial = std::isinf(smoothnessPenalty);
@@ -175,4 +169,134 @@ namespace HOMS
 			}
 		}
 	}
+
+	std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const GivensCoefficients& givensCoeffs)
+	{
+		const int dataLength = static_cast<int>(data.size());
+		assert(dataLength > 0);
+		std::vector<double> smoothApproximationErrors(dataLength, 0);
+		smoothApproximationErrors.resize(dataLength);
+
+		auto intervalFromStart = Interval(0, data(0), smoothnessOrder, smoothnessPenalty);
+		for (int idx = 1; idx < dataLength; idx++)
+		{
+			intervalFromStart.addNewDataPoint(givensCoeffs, data(idx));
+			smoothApproximationErrors[idx] = intervalFromStart.approxError;
+		}
+		return smoothApproximationErrors;
+	}
+
+
+	namespace
+	{
+		bool updateIntervalToRightBoundOrEraseIt(std::vector<Interval>& segments, const std::vector<double>& optimalEnergies,
+			const int idx, const Eigen::VectorXd& data, const int rightBound, const GivensCoefficients& givensCoeffs)
+		{
+			Interval& interval = segments[idx];
+			while (interval.rightBound < rightBound)
+			{
+				const auto currentRightBound = interval.rightBound;
+				const auto eps_curr = interval.approxError;
+				// Pruning strategy A: discard potential segments which can never be part of an optimal partitioning
+				if (rightBound > 1 && currentRightBound < rightBound
+					&& optimalEnergies[interval.leftBound - 1] + eps_curr >= optimalEnergies[currentRightBound])
+				{
+					segments.erase(std::next(segments.begin(), idx));
+					return true;
+				}
+				else
+				{
+					// Extend current interval by new data and update its approximation error with Givens rotations
+					interval.addNewDataPoint(givensCoeffs, data[interval.rightBound]);
+				}
+			}
+			return false;
+		}
+
+		void updateOptimalEnergyForRightBound(std::vector<double>& optimalEnergies, std::vector<int>& jumpsTracker, const Interval& interval, const int dataRightBound, const double jumpPenalty)
+		{
+			// Check if the current interval yields an improved energy value
+			const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 2] + jumpPenalty + interval.approxError;
+			if (optimalEnergyCandidate <= optimalEnergies[dataRightBound - 1])
+			{
+				optimalEnergies[dataRightBound - 1] = optimalEnergyCandidate;
+				jumpsTracker[dataRightBound - 1] = interval.leftBound - 1;
+			}
+		}
+
+		std::vector<std::pair<int, int>> getPartitioningFromOptimalLastJumps(const std::vector<int>& jumpsTracker)
+		{
+			std::vector<std::pair<int, int>> partitioning;
+			int rightBound = jumpsTracker.size();
+			while (true)
+			{
+				const auto leftBound = jumpsTracker.at(rightBound - 1) + 1;
+
+				partitioning.push_back(std::make_pair(leftBound, rightBound));
+				if (leftBound == 1)
+				{
+					break;
+				}
+				rightBound = leftBound - 1;
+			}
+			std::reverse(partitioning.begin(), partitioning.end());
+			return partitioning;
+		}
+
+	}
+
+	std::vector<std::pair<int, int>> findBestPartition(Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const double jumpPenalty, const GivensCoefficients& givensCoeffs)
+	{
+		const auto dataLength = static_cast<int>(data.size());
+		const auto optimalEnergiesNoJump = computeOptimalEnergiesNoSegmentation(data, smoothnessOrder, smoothnessPenalty, givensCoeffs);
+
+		// vector with optimal functional values for each discrete interval [1..r], r = 1..n
+		std::vector<double> optimalEnergies(dataLength, 0);
+
+		// Keep track of the optimal segment boundaries by storing the optimal last jumps for each 
+		// subdata on domains [1..r], r=1..dataLength
+		std::vector<int> jumpsTracker(dataLength, 0);
+
+		// container for the candidate segments, i.e., discrete intervals
+		std::vector<Interval> segments;
+		segments.push_back(Interval(2, data(1), smoothnessOrder, smoothnessPenalty));
+
+		for (int dataRightBound = 2; dataRightBound <= dataLength; dataRightBound++)
+		{
+			// Init with approximation error of single-segment partition, i.e. l=1
+			optimalEnergies[dataRightBound - 1] = optimalEnergiesNoJump[dataRightBound - 1];
+
+			// Loop backwards (required by pruning B) through candidates for the best last jump for data[1..r]
+			for (auto idx = static_cast<int>(segments.size()) - 1; idx >= 0;)
+			{
+				auto segmentDeleted = false;
+				const Interval& currInterval = segments[idx];
+				// Update the current interval to match rightBound and apply pruning strategy A if applicable
+				if (updateIntervalToRightBoundOrEraseIt(segments, optimalEnergies, idx, data, dataRightBound, givensCoeffs))
+				{
+					continue;
+				}
+				else
+				{
+					idx--;
+				}
+
+				updateOptimalEnergyForRightBound(optimalEnergies, jumpsTracker, currInterval, dataRightBound, jumpPenalty);
+
+				// Pruning strategy B: omit unnecessary computations of approximation errors
+				if (currInterval.approxError + jumpPenalty > optimalEnergies[dataRightBound - 1])
+				{
+					break;
+				}
+			}
+			// Add the interval with left bound = rightBound to the list of segments
+			if (dataRightBound <= dataLength - 1)
+			{
+				segments.push_back(Interval(dataRightBound + 1, data(dataRightBound), smoothnessOrder, smoothnessPenalty));
+			}
+		}
+
+		return getPartitioningFromOptimalLastJumps(jumpsTracker);
+	}
+
 }

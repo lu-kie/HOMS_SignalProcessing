@@ -240,6 +240,7 @@ namespace HOMS
 				Rquadratic.row(row) = -s * pivotRow + c * targetRow;
 			}
 		}
+		// obtain the polynomial coefficients and check the corresponding fitted values
 		Eigen::MatrixXd RquadraticUpper = Rquadratic.triangularView<Eigen::Upper>();
 		Eigen::VectorXd quadraticPolyCoeff = RquadraticUpper.colPivHouseholderQr().solve(quadraticRegressionInterval.data);
 		for (int idx = 0; idx < dataLength; idx++)
@@ -273,7 +274,7 @@ namespace HOMS
 			}
 		}
 
-		//std::cout << Rlinear;
+		// obtain linear coefficients and check them
 		Eigen::MatrixXd RlinearUpper = Rlinear.triangularView<Eigen::Upper>();
 		Eigen::VectorXd linearPolyCoeff = RlinearUpper.colPivHouseholderQr().solve(linearRegressionInterval.data);
 
@@ -283,6 +284,167 @@ namespace HOMS
 
 	TEST(HOMS, intervalApplyGivensRotationToDataHigherMS)
 	{
+		// fit third order discrete spline to parabolic data: expect perfect fit
+		const int dataLength = 7;
+		Eigen::VectorXd intervalData = Eigen::VectorXd::Zero(dataLength);
+		intervalData << 0, 1, 4, 9, 16, 25, 36;
+		int smoothnessOrder = 3;
+		double smoothnessPenalty = 1;
 
+		const int leftBound = 2;
+		const int rightBound = 8;
+
+		auto thirdOrderDiscreteSplineInterval = Interval(leftBound, rightBound, smoothnessOrder, smoothnessPenalty, intervalData);
+		const auto thirdOrderDiscreteSplineGivensCoeffs = GivensCoefficients(dataLength, smoothnessOrder, smoothnessPenalty);
+
+		Eigen::MatrixXd fullSystemMatrix(2 * dataLength - smoothnessOrder, dataLength);
+		fullSystemMatrix <<
+			1, 0, 0, 0, 0, 0, 0,
+			0, 1, 0, 0, 0, 0, 0,
+			0, 0, 1, 0, 0, 0, 0,
+			0, 0, 0, 1, 0, 0, 0,
+			0, 0, 0, 0, 1, 0, 0,
+			0, 0, 0, 0, 0, 1, 0,
+			0, 0, 0, 0, 0, 0, 1,
+			-1, 3, -3, 1, 0, 0, 0,
+			0, -1, 3, -3, 1, 0, 0,
+			0, 0, -1, 3, -3, 1, 0,
+			0, 0, 0, -1, 3, -3, 1;
+
+		int colOffset = 0;
+		const int rowOffset = dataLength - smoothnessOrder;
+		for (int row = dataLength; row < fullSystemMatrix.rows(); row++)
+		{
+			for (int col = colOffset; col < colOffset + smoothnessOrder + 1; col++)
+			{
+				thirdOrderDiscreteSplineInterval.applyGivensRotationToData(thirdOrderDiscreteSplineGivensCoeffs, row, col, rowOffset, colOffset);
+
+				const auto c = thirdOrderDiscreteSplineGivensCoeffs.C(row - rowOffset, col - colOffset);
+				const auto s = thirdOrderDiscreteSplineGivensCoeffs.S(row - rowOffset, col - colOffset);
+				// eliminate matrix entry (row,col)
+				const Eigen::VectorXd pivotRow = fullSystemMatrix.row(col);
+				const Eigen::VectorXd targetRow = fullSystemMatrix.row(row);
+				fullSystemMatrix.row(col) = c * pivotRow + s * targetRow;
+				fullSystemMatrix.row(row) = -s * pivotRow + c * targetRow;
+			}
+			colOffset++;
+		}
+		Eigen::MatrixXd RUpper = fullSystemMatrix.triangularView<Eigen::Upper>();
+		Eigen::VectorXd smoothedData = RUpper.colPivHouseholderQr().solve(thirdOrderDiscreteSplineInterval.data);
+
+		EXPECT_TRUE(intervalData.isApprox(smoothedData, 1e-12));
+	}
+
+	TEST(HOMS, computeOptimalEnergiesForNoSegmentationHigherOrderPotts)
+	{
+		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
+		const int dataLength = 6;
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, 25;
+
+		// quadratic regression for parabolic data -> expect only zero optimal energies
+		int polynomialOrder = 3;
+		const auto givensCoeffsQuadratic = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		const auto quadraticApproximationErrors = computeOptimalEnergiesNoSegmentation(data, polynomialOrder, smoothnessPenalty, givensCoeffsQuadratic);
+		for (const auto& err : quadraticApproximationErrors)
+		{
+			EXPECT_NEAR(err, 0, 1e-12);
+		}
+
+		// linear regression for parabolic data
+		polynomialOrder = 2;
+		const auto givensCoeffsLinear = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		const auto linearApproximationErrors = computeOptimalEnergiesNoSegmentation(data, polynomialOrder, smoothnessPenalty, givensCoeffsLinear);
+
+		// aux function for verifying the results
+		auto computeExpectedLinearApproxErr = [&data](int idx, double optimalSlope, double optimalOffset)
+		{
+			double approxErr = 0;
+			for (int i = 0; i <= idx; i++)
+			{
+				approxErr += std::pow((optimalOffset + double(i + 1) * optimalSlope) - data[i], 2);
+			}
+			return approxErr;
+		};
+
+		EXPECT_NEAR(linearApproximationErrors[0], 0, 1e-12);
+		EXPECT_NEAR(linearApproximationErrors[1], 0, 1e-12);
+
+		double optimalSlope = 2;
+		double optimalOffset = -2.333;
+		double expectedApproxErr = computeExpectedLinearApproxErr(2, optimalSlope, optimalOffset);
+
+		EXPECT_NEAR(linearApproximationErrors[2], expectedApproxErr, 1e-3);
+
+		optimalSlope = 3;
+		optimalOffset = -4;
+		expectedApproxErr = computeExpectedLinearApproxErr(3, optimalSlope, optimalOffset);
+
+		EXPECT_NEAR(linearApproximationErrors[3], expectedApproxErr, 1e-3);
+
+		optimalSlope = 4;
+		optimalOffset = -6;
+		expectedApproxErr = computeExpectedLinearApproxErr(4, optimalSlope, optimalOffset);
+
+		EXPECT_NEAR(linearApproximationErrors[4], expectedApproxErr, 1e-3);
+
+		optimalSlope = 5;
+		optimalOffset = -8.333;
+		expectedApproxErr = computeExpectedLinearApproxErr(5, optimalSlope, optimalOffset);
+
+		EXPECT_NEAR(linearApproximationErrors[5], expectedApproxErr, 1e-3);
+	}
+
+	TEST(HOMS, computeOptimalEnergiesForNoSegmentationHigherOrderMS)
+	{
+		const int smoothnessOrder = 3;
+		const auto smoothnessPenalty = 4;
+		const int dataLength = 6;
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, 25;
+
+		// discrete third order smoothing spline for parabolic data -> expect only zero optimal energies
+		const auto givensCoeffs = GivensCoefficients(dataLength, smoothnessOrder, smoothnessPenalty);
+		const auto approximationErrors = computeOptimalEnergiesNoSegmentation(data, smoothnessOrder, smoothnessPenalty, givensCoeffs);
+		for (const auto& err : approximationErrors)
+		{
+			EXPECT_NEAR(err, 0, 1e-12);
+		}
+	}
+
+	TEST(HOMS, findBestPartitionHigherOrderPotts)
+	{
+		int dataLength = 10;
+		int polynomialOrder = 1;
+		auto smoothnessPenalty = std::numeric_limits<double>::infinity();
+		const auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 1, 1, 1, 1, 1, 10, 10, 10, 10, 10;
+		// two segments are optimal
+		double jumpPenalty = 50;
+		auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+		EXPECT_EQ(foundPartition.size(), 2);
+		EXPECT_EQ(foundPartition.at(0), std::make_pair(1, 5));
+		EXPECT_EQ(foundPartition.at(1), std::make_pair(6, 10));
+
+		// single segment is optimal
+		jumpPenalty = 203;
+		foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+		EXPECT_EQ(foundPartition.size(), 1);
+		EXPECT_EQ(foundPartition.at(0), std::make_pair(1, 10));
+
+		// single element segments are optimal
+		data << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
+		jumpPenalty = 0;
+		foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
+
+		EXPECT_EQ(foundPartition.size(), dataLength);
+		for (int i = 0; i < dataLength; i++)
+		{
+			EXPECT_EQ(foundPartition.at(i), std::make_pair(i + 1, i + 1));
+		}
 	}
 }
