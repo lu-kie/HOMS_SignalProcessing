@@ -425,19 +425,18 @@ namespace HOMS
 		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 		{
 			const auto foundPartition = findBestPartition(data, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
-
 			if (jumpPenalty < 202.5)
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
 			}
 		}
 
@@ -449,7 +448,7 @@ namespace HOMS
 		EXPECT_EQ(foundPartition.size(), dataLength);
 		for (int i = 0; i < dataLength; i++)
 		{
-			EXPECT_EQ(foundPartition.at(i), std::make_pair(i, i));
+			EXPECT_EQ(foundPartition.segments.at(i), std::make_pair(i, i));
 		}
 
 		// only one segment for constant data 
@@ -460,7 +459,7 @@ namespace HOMS
 		{
 			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 			EXPECT_EQ(foundPartition.size(), 1);
-			EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 999));
+			EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 999));
 		}
 	}
 
@@ -483,14 +482,14 @@ namespace HOMS
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
 			}
 		}
 
@@ -502,7 +501,7 @@ namespace HOMS
 		EXPECT_EQ(foundPartition.size(), 4);
 
 		int sumSegmentLengths = 0;
-		for (const auto& segment : foundPartition)
+		for (const auto& segment : foundPartition.segments)
 		{
 			const auto segmentLength = segment.second - segment.first + 1;
 			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
@@ -517,8 +516,8 @@ namespace HOMS
 		for (const double& jumpPenalty : { 0.001,0.01,0.1, 1.0,10.0,100.0,1000.0 })
 		{
 			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
-			EXPECT_EQ(foundPartition.size(), 1);
-			EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 999));
+			EXPECT_EQ(foundPartition.segments.size(), 1);
+			EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 999));
 		}
 	}
 
@@ -541,14 +540,14 @@ namespace HOMS
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
 			}
 		}
 
@@ -560,7 +559,7 @@ namespace HOMS
 		EXPECT_EQ(foundPartition.size(), 4);
 
 		int sumSegmentLengths = 0;
-		for (const auto& segment : foundPartition)
+		for (const auto& segment : foundPartition.segments)
 		{
 			const auto segmentLength = segment.second - segment.first + 1;
 			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
@@ -581,7 +580,7 @@ namespace HOMS
 
 				foundPartition = findBestPartition(quadraticData, smoothnessOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.at(0), std::make_pair(0, dataLength - 1));
+				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, dataLength - 1));
 			}
 		}
 

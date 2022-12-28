@@ -4,6 +4,99 @@
 #include <iostream>
 namespace HOMS
 {
+	GivensCoefficients::GivensCoefficients(const int dataLength, const int smoothnessOrder, const double smoothnessPenalty)
+	{
+		const bool isPiecewisePolynomial = std::isinf(smoothnessPenalty);
+		if (isPiecewisePolynomial)
+		{
+			C = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
+			S = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
+		}
+		else
+		{
+			C = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder + 1);
+			S = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder + 1);
+		}
+
+		auto systemMatrix = computeSystemMatrix(dataLength, smoothnessOrder, smoothnessPenalty);
+		// aux variables
+		double rho;
+		int vv, tt, q, w, off = 0; // offsets to compensate for sparse systemMatrix
+
+		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
+		// Save them in C and S
+		for (int i = 0; i < systemMatrix.rows(); i++)
+		{
+			if (!isPiecewisePolynomial && i < dataLength)
+			{
+				continue;
+			}
+
+			for (int j = 0; j < smoothnessOrder + 1; j++)
+			{
+				if (isPiecewisePolynomial && (j == smoothnessOrder || i <= j))
+				{
+					break;
+				}
+
+				// systemMatrix(v, vv): Pivot element to eliminate the entry systemMatrix(i,j)
+				// C(q,j), S(q,j): locations to store the corresponding Givens coefficients
+				if (isPiecewisePolynomial)
+				{
+					q = i;
+					vv = j;
+					tt = smoothnessOrder;
+					w = 0;
+				}
+				else
+				{
+					q = i - dataLength + smoothnessOrder;
+					vv = 0;
+					tt = smoothnessOrder - j + 1;
+					w = j;
+				}
+				// Determine Givens coefficients for eliminating systemMatrix(i,j) with Pivot element systemMatrix(v,vv)
+				rho = std::pow(systemMatrix(j + off, vv), 2) + std::pow(systemMatrix(i, j), 2);
+				rho = std::sqrt(rho);
+				if (systemMatrix(j + off, vv) < 0)
+				{
+					rho = -rho;
+				}
+				// store the coefficients
+				C(q, j) = systemMatrix(j + off, vv) / rho;
+				S(q, j) = systemMatrix(i, j) / rho;
+				// update the system matrix accordingly, i.e. apply the Givens rotation to the corresponding matrix rows
+				Eigen::MatrixXd upperMatRow = systemMatrix.block(j + off, 0, 1, tt);
+				Eigen::MatrixXd lowerMatRow = systemMatrix.block(i, w, 1, tt);
+				systemMatrix.block(j + off, 0, 1, tt) = C(q, j) * upperMatRow + S(q, j) * lowerMatRow;
+				systemMatrix.block(i, w, 1, tt) = -S(q, j) * upperMatRow + C(q, j) * lowerMatRow;
+			}
+			if (!isPiecewisePolynomial)
+			{
+				off++;
+			}
+		}
+	}
+
+	Partitioning::Partitioning(const std::vector<int>& jumpsTracker)
+	{
+		segments.reserve(jumpsTracker.size());
+		auto rightBound = static_cast<int>(jumpsTracker.size() - 1);
+		while (true)
+		{
+			const auto leftBound = static_cast<int>(jumpsTracker.at(rightBound)) + 1;
+
+			segments.push_back(std::make_pair(leftBound, rightBound));
+			if (leftBound == 0)
+			{
+				break;
+			}
+			rightBound = leftBound - 1;
+		}
+		std::reverse(segments.begin(), segments.end());
+	}
+
+
 	namespace
 	{
 		/// @brief Compute the convolution of two vectors x,y
@@ -96,80 +189,6 @@ namespace HOMS
 		}
 	}
 
-	GivensCoefficients::GivensCoefficients(const int dataLength, const int smoothnessOrder, const double smoothnessPenalty)
-	{
-		const bool isPiecewisePolynomial = std::isinf(smoothnessPenalty);
-		if (isPiecewisePolynomial)
-		{
-			C = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
-			S = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
-		}
-		else
-		{
-			C = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder + 1);
-			S = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder + 1);
-		}
-
-		auto systemMatrix = computeSystemMatrix(dataLength, smoothnessOrder, smoothnessPenalty);
-		// aux variables
-		double rho;
-		int vv, tt, q, w, off = 0; // offsets to compensate for sparse systemMatrix
-
-		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
-		// Save them in C and S
-		for (int i = 0; i < systemMatrix.rows(); i++)
-		{
-			if (!isPiecewisePolynomial && i < dataLength)
-			{
-				continue;
-			}
-
-			for (int j = 0; j < smoothnessOrder + 1; j++)
-			{
-				if (isPiecewisePolynomial && (j == smoothnessOrder || i <= j))
-				{
-					break;
-				}
-
-				// systemMatrix(v, vv): Pivot element to eliminate the entry systemMatrix(i,j)
-				// C(q,j), S(q,j): locations to store the corresponding Givens coefficients
-				if (isPiecewisePolynomial)
-				{
-					q = i;
-					vv = j;
-					tt = smoothnessOrder;
-					w = 0;
-				}
-				else
-				{
-					q = i - dataLength + smoothnessOrder;
-					vv = 0;
-					tt = smoothnessOrder - j + 1;
-					w = j;
-				}
-				// Determine Givens coefficients for eliminating systemMatrix(i,j) with Pivot element systemMatrix(v,vv)
-				rho = std::pow(systemMatrix(j + off, vv), 2) + std::pow(systemMatrix(i, j), 2);
-				rho = std::sqrt(rho);
-				if (systemMatrix(j + off, vv) < 0)
-				{
-					rho = -rho;
-				}
-				// store the coefficients
-				C(q, j) = systemMatrix(j + off, vv) / rho;
-				S(q, j) = systemMatrix(i, j) / rho;
-				// update the system matrix accordingly, i.e. apply the Givens rotation to the corresponding matrix rows
-				Eigen::MatrixXd upperMatRow = systemMatrix.block(j + off, 0, 1, tt);
-				Eigen::MatrixXd lowerMatRow = systemMatrix.block(i, w, 1, tt);
-				systemMatrix.block(j + off, 0, 1, tt) = C(q, j) * upperMatRow + S(q, j) * lowerMatRow;
-				systemMatrix.block(i, w, 1, tt) = -S(q, j) * upperMatRow + C(q, j) * lowerMatRow;
-			}
-			if (!isPiecewisePolynomial)
-			{
-				off++;
-			}
-		}
-	}
-
 	std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const GivensCoefficients& givensCoeffs)
 	{
 		const int dataLength = static_cast<int>(data.size());
@@ -187,6 +206,7 @@ namespace HOMS
 	}
 
 
+	/// @brief Aux functions for fct findBestPartition
 	namespace
 	{
 		bool updateIntervalToRightBoundOrEraseIt(Interval& interval, const std::vector<double>& optimalEnergies,
@@ -221,29 +241,9 @@ namespace HOMS
 				jumpsTracker[dataRightBound] = interval.leftBound - 1;
 			}
 		}
-
-		std::vector<std::pair<int, int>> getPartitioningFromOptimalLastJumps(const std::vector<int>& jumpsTracker)
-		{
-			std::vector<std::pair<int, int>> partitioning;
-			int rightBound = jumpsTracker.size() - 1;
-			while (true)
-			{
-				const auto leftBound = jumpsTracker.at(rightBound) + 1;
-
-				partitioning.push_back(std::make_pair(leftBound, rightBound));
-				if (leftBound == 0)
-				{
-					break;
-				}
-				rightBound = leftBound - 1;
-			}
-			std::reverse(partitioning.begin(), partitioning.end());
-			return partitioning;
-		}
-
 	}
 
-	std::vector<std::pair<int, int>> findBestPartition(Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const double jumpPenalty, const GivensCoefficients& givensCoeffs)
+	Partitioning findBestPartition(Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const double jumpPenalty, const GivensCoefficients& givensCoeffs)
 	{
 		const auto dataLength = static_cast<int>(data.size());
 		const auto optimalEnergiesNoJump = computeOptimalEnergiesNoSegmentation(data, smoothnessOrder, smoothnessPenalty, givensCoeffs);
@@ -294,7 +294,7 @@ namespace HOMS
 			}
 		}
 
-		return getPartitioningFromOptimalLastJumps(jumpsTracker);
+		return Partitioning(jumpsTracker);
 	}
 
 }
