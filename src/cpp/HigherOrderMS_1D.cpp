@@ -2,12 +2,13 @@
 #include "Interval.h"
 #include <limits>
 #include <iostream>
+
 namespace HOMS
 {
 	GivensCoefficients::GivensCoefficients(const int dataLength, const int smoothnessOrder, const double smoothnessPenalty)
 	{
-		const bool isPiecewisePolynomial = std::isinf(smoothnessPenalty);
-		if (isPiecewisePolynomial)
+		const bool isPcwPolynomial = std::isinf(smoothnessPenalty);
+		if (isPcwPolynomial)
 		{
 			C = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
 			S = Eigen::MatrixXd::Zero(dataLength, smoothnessOrder);
@@ -27,21 +28,21 @@ namespace HOMS
 		// Save them in C and S
 		for (int i = 0; i < systemMatrix.rows(); i++)
 		{
-			if (!isPiecewisePolynomial && i < dataLength)
+			if (!isPcwPolynomial && i < dataLength)
 			{
 				continue;
 			}
 
 			for (int j = 0; j < smoothnessOrder + 1; j++)
 			{
-				if (isPiecewisePolynomial && (j == smoothnessOrder || i <= j))
+				if (isPcwPolynomial && (j == smoothnessOrder || i <= j))
 				{
 					break;
 				}
 
 				// systemMatrix(v, vv): Pivot element to eliminate the entry systemMatrix(i,j)
 				// C(q,j), S(q,j): locations to store the corresponding Givens coefficients
-				if (isPiecewisePolynomial)
+				if (isPcwPolynomial)
 				{
 					q = i;
 					vv = j;
@@ -71,7 +72,7 @@ namespace HOMS
 				systemMatrix.block(j + off, 0, 1, tt) = C(q, j) * upperMatRow + S(q, j) * lowerMatRow;
 				systemMatrix.block(i, w, 1, tt) = -S(q, j) * upperMatRow + C(q, j) * lowerMatRow;
 			}
-			if (!isPiecewisePolynomial)
+			if (!isPcwPolynomial)
 			{
 				off++;
 			}
@@ -86,7 +87,7 @@ namespace HOMS
 		{
 			const auto leftBound = static_cast<int>(jumpsTracker.at(rightBound)) + 1;
 
-			segments.push_back(std::make_pair(leftBound, rightBound));
+			segments.push_back(Segment(leftBound, rightBound));
 			if (leftBound == 0)
 			{
 				break;
@@ -95,7 +96,6 @@ namespace HOMS
 		}
 		std::reverse(segments.begin(), segments.end());
 	}
-
 
 	namespace
 	{
@@ -297,4 +297,158 @@ namespace HOMS
 		return Partitioning(jumpsTracker);
 	}
 
+
+	Eigen::VectorXd computeResultsFromPartition(const Partitioning& partition, Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const GivensCoefficients& givensCoeffs)
+	{
+		const auto dataLength = static_cast<int>(data.size());
+		Eigen::VectorXd pcwSmoothedResult = Eigen::VectorXd::Zero(dataLength);
+
+		// Create interval objects corresponding to the segments of the partition
+		std::vector<Interval> Intervals;
+		Intervals.reserve(partition.size());
+		for (const auto& segment : partition.segments)
+		{
+			const auto leftBound = segment.leftBound;
+			const auto rightBound = segment.rightBound;
+			const auto segmentSize = segment.size();
+
+			if (segmentSize <= smoothnessOrder)
+			{
+				// nothing to do for small segments
+				pcwSmoothedResult.segment(leftBound, segmentSize) = data.segment(leftBound, segmentSize);
+				continue;
+			}
+
+			Intervals.push_back(Interval(leftBound, rightBound, smoothnessOrder, smoothnessPenalty, data.segment(leftBound, segmentSize)));
+		};
+
+		if (Intervals.empty())
+		{
+			// no reconstruction needed
+			return pcwSmoothedResult;
+		}
+
+		// Sort Intervals in size-ascending order to avoid repeating identical row transformations of the system matrix
+		std::sort(Intervals.begin(), Intervals.end(),
+			[](const Interval& seg1, const Interval& seg2)
+			{
+				return seg1.size() < seg2.size();
+			});
+
+		// Solve the linear equation systems corresponding to each interval
+		// Declare sparse system matrix of underlying least squares problem
+		Eigen::MatrixXd systemMatrix = computeSystemMatrix(dataLength, smoothnessOrder, smoothnessPenalty);
+		const auto isPcwPolynomial = std::isinf(smoothnessPenalty);
+
+		// The "master" iterator knowing which intervals have to be considered (i.e. which interval lengths)
+		auto startOfUnfinishedSegments = Intervals.begin();
+
+		// Matrix elimination (i: row, j: column)
+		int upperRowLength;
+		int colOffset = 0;
+		for (int i = 0; i < systemMatrix.rows(); i++)
+		{
+			if (!isPcwPolynomial && i < dataLength)
+			{
+				// nothing to eliminate yet
+				continue;
+			}
+
+			for (int j = 0; j < smoothnessOrder + 1; j++)
+			{
+				if (isPcwPolynomial && (j == smoothnessOrder || i <= j))
+				{
+					break;
+				}
+
+				int rowOffset = 0;
+				int lowerRowBeginCol = 0;
+				if (isPcwPolynomial)
+				{
+					upperRowLength = smoothnessOrder;
+				}
+				else
+				{
+					rowOffset = dataLength - smoothnessOrder;
+					upperRowLength = smoothnessOrder - j + 1;
+					lowerRowBeginCol = j;
+				}
+
+				// Apply the Givens rotation to the corresponding matrix rows
+				const double c = givensCoeffs.C(i - rowOffset, j);
+				const double s = givensCoeffs.S(i - rowOffset, j);
+
+				Eigen::MatrixXd upperMatRow = systemMatrix.block(j + colOffset, 0, 1, upperRowLength);
+				Eigen::MatrixXd lowerMatRow = systemMatrix.block(i, lowerRowBeginCol, 1, upperRowLength);
+
+				systemMatrix.block(j + colOffset, 0, 1, upperRowLength) = c * upperMatRow + s * lowerMatRow;
+				systemMatrix.block(i, lowerRowBeginCol, 1, upperRowLength) = -s * upperMatRow + c * lowerMatRow;
+
+				// Update interval data accordingly
+				for (auto it = startOfUnfinishedSegments; it != Intervals.end(); it++)
+				{
+					Interval& currInterval = *it;
+					currInterval.applyGivensRotationToData(givensCoeffs, i, j, rowOffset, colOffset);
+				}
+			}
+			if (!isPcwPolynomial)
+			{
+				colOffset++;
+			}
+
+
+
+			// Fill result on finished intervals and delete them from the list of intervals
+			//while (true)
+			for (; startOfUnfinishedSegments != Intervals.end(); startOfUnfinishedSegments++)
+			{
+				Interval& currInterval = *startOfUnfinishedSegments;
+				const auto currIntervalSize = currInterval.size();
+
+				// If no interval has the current length, break:
+				if ((isPcwPolynomial && (currIntervalSize != i + 1)) || (!isPcwPolynomial && (currIntervalSize != i - dataLength + smoothnessOrder + 1)))
+				{
+					break;
+				}
+				const auto leftBound = currInterval.leftBound;
+				const auto rightBound = currInterval.rightBound;
+				const auto& currData = currInterval.data;
+				if (!isPcwPolynomial)
+				{
+					// Fill segment via back substitution
+					pcwSmoothedResult(rightBound) = currData(currIntervalSize - 1) / systemMatrix(currIntervalSize - 1, 0);
+					for (int ii = currIntervalSize - 2; ii >= 0; ii--)
+					{
+						double rhsSum = 0;
+						for (int j = 1; j <= std::min(smoothnessOrder, currIntervalSize - ii - 1); j++)
+						{
+							rhsSum += systemMatrix(ii, j) * pcwSmoothedResult(leftBound + ii + j);
+						}
+						pcwSmoothedResult(leftBound + ii) = (currData(ii) - rhsSum) / systemMatrix(ii, 0);
+					}
+				}
+				else
+				{
+					// Compute segment's polynomial coefficients
+					const Eigen::VectorXd polynomialCoeffs = systemMatrix.block(0, 0, smoothnessOrder, smoothnessOrder).triangularView<Eigen::Upper>().solve(currData.head(smoothnessOrder));
+
+					// Fill the segment with values induced by the polynomial coefficients
+					pcwSmoothedResult.segment(leftBound, currIntervalSize).array() += polynomialCoeffs.tail(1).value();
+					Eigen::VectorXd xValues = Eigen::VectorXd::LinSpaced(currIntervalSize, 1, currIntervalSize);
+					for (int j = static_cast<int>(polynomialCoeffs.size()) - 2; j >= 0; j--)
+					{
+						pcwSmoothedResult.segment(leftBound, currIntervalSize) += polynomialCoeffs(j) * xValues;
+						xValues.array() *= xValues.array();
+					}
+				}
+			}
+
+			// Stop when all segments are finished
+			if (startOfUnfinishedSegments == Intervals.end())
+			{
+				return pcwSmoothedResult;
+			}
+		}
+		return pcwSmoothedResult;
+	}
 }

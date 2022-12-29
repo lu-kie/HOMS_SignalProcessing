@@ -2,7 +2,7 @@
 
 namespace HOMS
 {
-	int Interval::getLength() const
+	int Interval::size() const
 	{
 		return rightBound - leftBound + 1;
 	}
@@ -12,7 +12,7 @@ namespace HOMS
 	{
 		// Aux variables
 		double finiteDifferenceRowData = 0;
-		const auto intervalLength = getLength();
+		const auto intervalLength = size();
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
@@ -113,9 +113,15 @@ namespace HOMS
 			return;
 		}
 
-		const double pivotRowData = data(col);
-		const auto intervalLength = getLength();
-		const double eliminatedRowData = data(row);//std::isinf(smoothnessPenalty) ? data(row) : data(row + intervalLength);
+		int eliminatedRowDataIndexOffset = 0;
+		if (!std::isinf(smoothnessPenalty))
+		{
+			eliminatedRowDataIndexOffset = static_cast<int>(givensCoeffs.C.rows()) - size();
+		}
+
+		const double pivotRowData = data(col + colOffset);
+		const double eliminatedRowData = data(row - eliminatedRowDataIndexOffset);
+
 		// Apply Givens rotation to data vector
 		double c, s;
 		if (std::isinf(smoothnessPenalty))
@@ -125,10 +131,10 @@ namespace HOMS
 		}
 		else
 		{
-			c = givensCoeffs.C(row - rowOffset, col - colOffset);
-			s = givensCoeffs.S(row - rowOffset, col - colOffset);
+			c = givensCoeffs.C(row - rowOffset, col);
+			s = givensCoeffs.S(row - rowOffset, col);
 		}
-		data(col) = c * pivotRowData + s * eliminatedRowData;
-		data(row) = -s * pivotRowData + c * eliminatedRowData;
+		data(col + colOffset) = c * pivotRowData + s * eliminatedRowData;
+		data(row - eliminatedRowDataIndexOffset) = -s * pivotRowData + c * eliminatedRowData;
 	}
 }

@@ -5,7 +5,8 @@ namespace HOMS
 {
 	struct GivensCoefficients
 	{
-		/// @brief 
+		/// @brief Construct the Givens coefficients for computing a QR decomposition of the system matrix 
+		/// corresponding to the smoothnessOrder and smoothnessPenalty.
 		/// @param dataLength 
 		/// @param smoothnessOrder 
 		/// @param smoothnessPenalty 
@@ -15,13 +16,37 @@ namespace HOMS
 		Eigen::MatrixXd S;
 	};
 
+
+	struct Segment
+	{
+		int size() const { return rightBound - leftBound + 1; }
+
+		int leftBound{ 0 };
+		int rightBound{ 0 };
+
+
+		bool operator==(const Segment& rhs) const
+		{
+			return leftBound == rhs.leftBound && rightBound == rhs.rightBound;
+		}
+	};
+
 	struct Partitioning
 	{
+		/// @brief Construct a partitioning object from the tracked last optimal jumps from findBestPartition
+		/// @param jumpsTracker 
 		Partitioning(const std::vector<int>& jumpsTracker);
-		int size() const { return static_cast<int>(segments.size()); };
-		std::vector<std::pair<int, int>> segments;
 
+		/// @brief Default ctor
+		Partitioning() {};
+
+		/// @brief get the number of segments
+		/// @return number of segments
+		int size() const { return static_cast<int>(segments.size()); };
+
+		std::vector<Segment> segments; //< the segments of the partitioning encoded as left and right bounds
 	};
+
 
 	/// @brief Provides the underlying (sparse) system matrix for the given parameters
 	/// @param dataLength 
@@ -48,9 +73,12 @@ namespace HOMS
 	/// @return optimal partition encoded as pairs of segment boundaries
 	Partitioning findBestPartition(Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const double jumpPenalty, const GivensCoefficients& givensCoeffs);
 
-	// Computes the corresponding reconstruction for an optimal partition
-	/*
-	void reconstructionFromPartition(vec& J, vec& u, vec& data, const int n, const int k, const double beta, mat& C, mat& S);
-	bool compare_intervLengths(Interval inter1, Interval inter2);
-	*/
+	/// @brief Compute the corresponding piecewised smoothed signal from an optimal partition
+	/// @param partition 
+	/// @param data 
+	/// @param smoothnessOrder 
+	/// @param smoothnessPenalty 
+	/// @param givensCoeffs 
+	/// @return 
+	Eigen::VectorXd computeResultsFromPartition(const Partitioning& partition, Eigen::VectorXd& data, const int smoothnessOrder, const double smoothnessPenalty, const GivensCoefficients& givensCoeffs);
 }

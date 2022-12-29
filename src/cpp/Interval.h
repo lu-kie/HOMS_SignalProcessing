@@ -41,7 +41,7 @@ namespace HOMS
 			, smoothnessOrder(smoothnessOrder)
 			, smoothnessPenalty(smoothnessPenalty)
 		{
-			const auto intervalLength = getLength();
+			const auto intervalLength = size();
 			if (intervalData.size() != intervalLength)
 			{
 				throw std::invalid_argument("Data and interval must have the same size.");
@@ -60,7 +60,7 @@ namespace HOMS
 
 		/// @brief Give interval / data length
 		/// @return interval length 
-		int getLength() const;
+		int size() const;
 
 		/// @brief Append data point to the interval and update the corresp. approximation error. 
 		/// The interval is enlarged by one element.
@@ -83,11 +83,11 @@ namespace HOMS
 		/// @param col 
 		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
 
-		int leftBound;				///< left bound of discrete interval
-		int rightBound;				///< right bound of discrete interval
-		double approxError{ 0.0 };  ///< optimal approximation error within interval
-		int smoothnessOrder;		///< smoothing order
-		double smoothnessPenalty;	///< smoothing penalty
-		Eigen::VectorXd data;		///< data corresponding to the interval
+		int leftBound{ -1 };			  ///< left bound of discrete interval
+		int rightBound{ -1 };			  ///< right bound of discrete interval
+		double approxError{ 0.0 };		  ///< optimal approximation error within interval
+		int smoothnessOrder{ -1 };		  ///< smoothing order
+		double smoothnessPenalty{ -1.0 }; ///< smoothing penalty
+		Eigen::VectorXd data;			  ///< data corresponding to the interval
 	};
 }

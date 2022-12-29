@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include "HigherOrderMS_1D.h"
 #include "Interval.h"
+#include "HigherOrderMS_1D.h"
 
 namespace HOMS
 {
-	TEST(HOMS, systemMatrixHigherOrderPotts)
+	TEST(HOMS, systemMatrixPcwPolynomial)
 	{
 		const int dataLength = 10;
 
@@ -60,7 +60,7 @@ namespace HOMS
 		}
 	}
 
-	TEST(HOMS, computeGivensCoefficientsPotts)
+	TEST(HOMS, computeGivensCoefficientsPcwPolynomial)
 	{
 		const int dataLength = 4;
 		const int polynomialOrder = 3;
@@ -154,7 +154,7 @@ namespace HOMS
 		EXPECT_TRUE(fullSystemMatrix.isApprox(Q.transpose() * R));
 	}
 
-	TEST(HOMS, intervalApproxErrorHigherOrderPotts)
+	TEST(HOMS, intervalApproxErrorPcwPolynomial)
 	{
 		// fit quadratic polynomial to parabolic data: expect zero approximation error
 		const int leftBound = 2;
@@ -163,7 +163,7 @@ namespace HOMS
 		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
 
 		auto quadraticRegressionInterval = Interval(leftBound, dataPoint, polynomialOrder, smoothnessPenalty);
-		EXPECT_EQ(quadraticRegressionInterval.getLength(), 1);
+		EXPECT_EQ(quadraticRegressionInterval.size(), 1);
 
 		const auto quadraticGivensCoeffs = GivensCoefficients(6, polynomialOrder, smoothnessPenalty);
 		for (const double newDataPoint : {1, 4, 9, 16, 25})
@@ -171,7 +171,7 @@ namespace HOMS
 			quadraticRegressionInterval.addNewDataPoint(quadraticGivensCoeffs, newDataPoint);
 			EXPECT_NEAR(quadraticRegressionInterval.approxError, 0, 1e-12);
 		}
-		EXPECT_EQ(quadraticRegressionInterval.getLength(), 6);
+		EXPECT_EQ(quadraticRegressionInterval.size(), 6);
 
 		// fit linear polynomial to parabolic data: linear regression f(x) = 5x-13.33
 		polynomialOrder = 2;
@@ -184,7 +184,7 @@ namespace HOMS
 		const double expectedApproxError = std::pow(3.33, 2) + std::pow(1 - 1.67, 2) + std::pow(4 - 6.67, 2)
 			+ std::pow(9 - 11.67, 2) + std::pow(16 - 16.67, 2) + std::pow(25 - 21.67, 2);
 		EXPECT_NEAR(linearRegressionInterval.approxError, expectedApproxError, 1e-4);
-		EXPECT_EQ(quadraticRegressionInterval.getLength(), 6);
+		EXPECT_EQ(quadraticRegressionInterval.size(), 6);
 	}
 
 	TEST(HOMS, intervalApproxErrorHigherOrderMS)
@@ -196,7 +196,7 @@ namespace HOMS
 		const auto smoothnessPenalty = 3;
 
 		auto thirdOrderSplineInterval = Interval(leftBound, dataPoint, smoothnessOrder, smoothnessPenalty);
-		EXPECT_EQ(thirdOrderSplineInterval.getLength(), 1);
+		EXPECT_EQ(thirdOrderSplineInterval.size(), 1);
 
 		const auto thirdOrderSplineGivensCoeffs = GivensCoefficients(6, smoothnessOrder, smoothnessPenalty);
 		for (const double newDataPoint : {1, 4, 9, 16, 25})
@@ -204,10 +204,10 @@ namespace HOMS
 			thirdOrderSplineInterval.addNewDataPoint(thirdOrderSplineGivensCoeffs, newDataPoint);
 			EXPECT_NEAR(thirdOrderSplineInterval.approxError, 0, 1e-12);
 		}
-		EXPECT_EQ(thirdOrderSplineInterval.getLength(), 6);
+		EXPECT_EQ(thirdOrderSplineInterval.size(), 6);
 	}
 
-	TEST(HOMS, intervalApplyGivensRotationToDataHigherOrderPotts)
+	TEST(HOMS, intervalApplyGivensRotationToDataPcwPolynomial)
 	{
 		// fit quadratic polynomial to parabolic data: expect perfect fit
 		const int dataLength = 6;
@@ -317,7 +317,7 @@ namespace HOMS
 		{
 			for (int col = colOffset; col < colOffset + smoothnessOrder + 1; col++)
 			{
-				thirdOrderDiscreteSplineInterval.applyGivensRotationToData(thirdOrderDiscreteSplineGivensCoeffs, row, col, rowOffset, colOffset);
+				thirdOrderDiscreteSplineInterval.applyGivensRotationToData(thirdOrderDiscreteSplineGivensCoeffs, row, col - colOffset, rowOffset, colOffset);
 
 				const auto c = thirdOrderDiscreteSplineGivensCoeffs.C(row - rowOffset, col - colOffset);
 				const auto s = thirdOrderDiscreteSplineGivensCoeffs.S(row - rowOffset, col - colOffset);
@@ -335,7 +335,7 @@ namespace HOMS
 		EXPECT_TRUE(intervalData.isApprox(smoothedData, 1e-12));
 	}
 
-	TEST(HOMS, computeOptimalEnergiesForNoSegmentationHigherOrderPotts)
+	TEST(HOMS, computeOptimalEnergiesForNoSegmentationPcwPolynomial)
 	{
 		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
 		const int dataLength = 6;
@@ -429,14 +429,14 @@ namespace HOMS
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), Segment(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 9));
 			}
 		}
 
@@ -448,7 +448,7 @@ namespace HOMS
 		EXPECT_EQ(foundPartition.size(), dataLength);
 		for (int i = 0; i < dataLength; i++)
 		{
-			EXPECT_EQ(foundPartition.segments.at(i), std::make_pair(i, i));
+			EXPECT_EQ(foundPartition.segments.at(i), Segment(i, i));
 		}
 
 		// only one segment for constant data 
@@ -459,7 +459,7 @@ namespace HOMS
 		{
 			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 			EXPECT_EQ(foundPartition.size(), 1);
-			EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 999));
+			EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
 		}
 	}
 
@@ -482,14 +482,14 @@ namespace HOMS
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), Segment(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 9));
 			}
 		}
 
@@ -503,7 +503,7 @@ namespace HOMS
 		int sumSegmentLengths = 0;
 		for (const auto& segment : foundPartition.segments)
 		{
-			const auto segmentLength = segment.second - segment.first + 1;
+			const auto segmentLength = segment.size();
 			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
 			sumSegmentLengths += segmentLength;
 		}
@@ -517,7 +517,7 @@ namespace HOMS
 		{
 			foundPartition = findBestPartition(constantData, polynomialOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 			EXPECT_EQ(foundPartition.segments.size(), 1);
-			EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 999));
+			EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
 		}
 	}
 
@@ -540,14 +540,14 @@ namespace HOMS
 			{
 				// two segments are optimal
 				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 4));
-				EXPECT_EQ(foundPartition.segments.at(1), std::make_pair(5, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 4));
+				EXPECT_EQ(foundPartition.segments.at(1), Segment(5, 9));
 			}
 			else
 			{
 				// single segment is optimal
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, 9));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 9));
 			}
 		}
 
@@ -561,7 +561,7 @@ namespace HOMS
 		int sumSegmentLengths = 0;
 		for (const auto& segment : foundPartition.segments)
 		{
-			const auto segmentLength = segment.second - segment.first + 1;
+			const auto segmentLength = segment.size();
 			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
 			sumSegmentLengths += segmentLength;
 		}
@@ -580,9 +580,70 @@ namespace HOMS
 
 				foundPartition = findBestPartition(quadraticData, smoothnessOrder, smoothnessPenalty, jumpPenalty, givensCoeffs);
 				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), std::make_pair(0, dataLength - 1));
+				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, dataLength - 1));
 			}
 		}
 
+	}
+
+	TEST(HOMS, computeResultsFromPartitionPcwPolynomial)
+	{
+		// piecewise quadratic, perfect fit
+		int dataLength = 15;
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50;
+
+		Partitioning partition;
+		partition.segments.push_back(Segment(0, 5));
+		partition.segments.push_back(Segment(6, 12));
+		partition.segments.push_back(Segment(13, 14));
+
+		int polynomialOrder = 3;
+		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
+
+		auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		auto result = computeResultsFromPartition(partition, data, polynomialOrder, smoothnessPenalty, givensCoeffs);
+
+		EXPECT_EQ(dataLength, static_cast<int>(result.size()));
+		EXPECT_TRUE(data.isApprox(result, 1e-8));
+
+		// piecewise linear, first segment f(x) = 5x-13.33, second segment perfect fit
+		data << 0, 1, 4, 9, 16, 25, 100, 90, 80, 70, 60, 50, 40, 30, 20;
+
+		partition.segments.clear();
+		partition.segments.push_back(Segment(0, 5));
+		partition.segments.push_back(Segment(6, 14));
+		polynomialOrder = 2;
+
+		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		result = computeResultsFromPartition(partition, data, polynomialOrder, smoothnessPenalty, givensCoeffs);
+
+
+		EXPECT_EQ(dataLength, static_cast<int>(result.size()));
+		Eigen::VectorXd expectedResult = Eigen::VectorXd::Zero(dataLength);
+		expectedResult << -3.33, 1.67, 6.67, 11.67, 16.67, 21.67, 100, 90, 80, 70, 60, 50, 40, 30, 20;
+		EXPECT_TRUE(expectedResult.isApprox(result, 1e-4));
+	}
+
+	TEST(HOMS, computeResultsFromPartitionHigherOrderMS)
+	{
+		// piecewise quadratic, perfect fit for third order smoothness
+		int dataLength = 15;
+		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
+		data << 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50;
+
+		Partitioning partition;
+		partition.segments.push_back(Segment(0, 5));
+		partition.segments.push_back(Segment(6, 12));
+		partition.segments.push_back(Segment(13, 14));
+
+		int smoothnessOrder = 3;
+		const auto smoothnessPenalty = 1;
+
+		auto givensCoeffs = GivensCoefficients(dataLength, smoothnessOrder, smoothnessPenalty);
+		auto result = computeResultsFromPartition(partition, data, smoothnessOrder, smoothnessPenalty, givensCoeffs);
+
+		EXPECT_EQ(dataLength, static_cast<int>(result.size()));
+		EXPECT_TRUE(data.isApprox(result, 1e-8));
 	}
 }
