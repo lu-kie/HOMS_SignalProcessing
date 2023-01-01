@@ -1,6 +1,8 @@
 #include <iostream>
 #include <limits>
 #include "HigherOrderMS_1D.h"
+#include "PcwSmoothPartitioningBase.h"
+
 int main(int argc, char* argv[])
 {
 	std::cout << "Hello World!\n";

@@ -1,0 +1,137 @@
+#include "PcwSmoothPartitioning.h"
+#include "Interval.h"
+
+namespace HOMS
+{
+	int PcwSmoothPartitioning::minSegmentSize() const
+	{
+		return m_smoothingOrder + 1;
+	}
+
+	GivensCoefficients PcwSmoothPartitioning::createGivensCoefficients() const
+	{
+		return GivensCoefficients(m_dataLength, m_smoothingOrder, m_smoothnessPenalty, computeSystemMatrix());
+	}
+
+
+	namespace
+	{
+		/// @brief Compute the convolution of two vectors x,y
+		/// @param x 
+		/// @param y 
+		/// @return convolution of x and y
+		Eigen::VectorXd convolveVectors(const Eigen::VectorXd& x, const Eigen::VectorXd& y)
+		{
+			const auto sizeX = x.size();
+			const auto sizeY = y.size();
+			Eigen::VectorXd conv = Eigen::VectorXd::Zero(sizeX + sizeY - 1);
+			for (int j = 0; j < sizeY; j++)
+			{
+				for (int i = 0; i < sizeX; i++)
+				{
+					conv(j + i) += y(j) * x(i);
+				}
+			}
+			return conv;
+		}
+	}
+
+	Eigen::MatrixXd PcwSmoothPartitioning::computeSystemMatrix() const
+	{
+		/* Example for k = 2, beta = 1
+			systemMatrix = [ 1  0  0
+							 ...
+							 1  0  0
+							 1 -2  1
+							 ...
+							 1 -2  1 ]
+
+			which is a sparse representation of the full system matrix
+
+			[1  0  0   ... 0
+			 0  1  0   ... 0
+			 ...
+			 0  0  0   ... 1
+			 1 -2  1   ... 0
+			 0  1 -2 1 ... 0
+			 ...
+			 ...      1 -2 1 ]
+			*/
+
+		Eigen::MatrixXd systemMatrix = Eigen::MatrixXd::Zero(2 * m_dataLength - m_smoothingOrder, m_smoothingOrder + 1);
+		// The upper block of systemMatrix is the identity matrix
+		systemMatrix.col(0).setOnes();
+
+		// The lower block has rows given by k-fold convolutions of the k-th order finite difference vector with itself
+		Eigen::Vector2d forwardDifferenceCoeffs(-1, 1);
+		Eigen::VectorXd kFoldFiniteDifferenceCoeffs(2);
+		kFoldFiniteDifferenceCoeffs << -1, 1;
+		for (int t = 0; t < m_smoothingOrder - 1; t++)
+		{
+			const auto convolutedCoeffs = convolveVectors(kFoldFiniteDifferenceCoeffs, forwardDifferenceCoeffs);
+			kFoldFiniteDifferenceCoeffs.resizeLike(convolutedCoeffs);
+			kFoldFiniteDifferenceCoeffs = convolutedCoeffs;
+		}
+
+		kFoldFiniteDifferenceCoeffs *= pow(m_smoothnessPenalty, m_smoothingOrder);
+		for (int r = m_dataLength; r < 2 * m_dataLength - m_smoothingOrder; r++)
+		{
+			systemMatrix.row(r) = kFoldFiniteDifferenceCoeffs;
+		}
+		return systemMatrix;
+	}
+
+	void PcwSmoothPartitioning::eliminateSystemMatrixEntry(Eigen::MatrixXd& systemMatrix, int row, int col) const
+	{
+		if (row < m_dataLength)
+		{
+			return;
+		}
+
+		// aux variables for compensating systemMatrix being stored sparsely (see member fct computeSystemMatrix)
+		const auto rowOffset = m_dataLength - m_smoothingOrder;
+		const auto colOffset = row - m_dataLength;
+		const auto upperRowLength = m_smoothingOrder - col + 1;
+		const auto lowerRowBeginCol = col;
+
+		// Apply the Givens rotation to the corresponding matrix rows
+		const double c = m_givensCoeffs.C(row - rowOffset, col);
+		const double s = m_givensCoeffs.S(row - rowOffset, col);
+
+		const Eigen::MatrixXd upperMatRow = systemMatrix.block(col + colOffset, 0, 1, upperRowLength);
+		const Eigen::MatrixXd lowerMatRow = systemMatrix.block(row, lowerRowBeginCol, 1, upperRowLength);
+
+		systemMatrix.block(col + colOffset, 0, 1, upperRowLength) = c * upperMatRow + s * lowerMatRow;
+		systemMatrix.block(row, lowerRowBeginCol, 1, upperRowLength) = -s * upperMatRow + c * lowerMatRow;
+	}
+
+	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(IntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
+	{
+		const auto leftBound = segment->leftBound;
+		const auto rightBound = segment->rightBound;
+		const auto& currData = segment->data;
+		const auto segmentSize = segment->size();
+		// Fill segment via back substitution
+		resultToBeFilled(rightBound) = currData(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
+		for (int ii = segmentSize - 2; ii >= 0; ii--)
+		{
+			double rhsSum = 0;
+			for (int j = 1; j <= std::min(m_smoothingOrder, segmentSize - ii - 1); j++)
+			{
+				rhsSum += partialUpperTriMat(ii, j) * resultToBeFilled(leftBound + ii + j);
+			}
+			resultToBeFilled(leftBound + ii) = (currData(ii) - rhsSum) / partialUpperTriMat(ii, 0);
+		}
+	}
+
+	std::unique_ptr<IntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
+	{
+		return std::make_unique<IntervalSmooth>(IntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty));
+	}
+
+	std::unique_ptr<IntervalBase> PcwSmoothPartitioning::createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
+	{
+
+		return std::make_unique<IntervalSmooth>(IntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));
+	}
+}

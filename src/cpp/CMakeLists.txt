@@ -12,8 +12,7 @@ find_package(Eigen3 REQUIRED)
 
 add_executable(
 #HOMS "HOMS.cpp" "HigherOrderMS_1D.cpp"
-HOMStests "HOMStests.cpp" "HigherOrderMS_1D.cpp" "Interval.cpp"
-)
+HOMStests "HOMStests.cpp" "HigherOrderMS_1D.cpp" "Interval.cpp" "PcwSmoothPartitioningBase.cpp" "PcwPolynomialPartitioning.cpp" "PcwSmoothPartitioning.cpp")
 
 
 target_link_libraries(
