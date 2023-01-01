@@ -1,5 +1,4 @@
 #include "PcwSmoothPartitioning.h"
-#include "Interval.h"
 
 namespace HOMS
 {
@@ -8,9 +7,45 @@ namespace HOMS
 		return m_smoothingOrder + 1;
 	}
 
-	GivensCoefficients PcwSmoothPartitioning::createGivensCoefficients() const
+	void PcwSmoothPartitioning::computeGivensCoefficients()
 	{
-		return GivensCoefficients(m_dataLength, m_smoothingOrder, m_smoothnessPenalty, computeSystemMatrix());
+		m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
+		m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
+
+
+		auto systemMatrix = createSystemMatrix();
+
+		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
+		// Save them in C and S
+		const auto numRows = static_cast<int>(systemMatrix.rows());
+		const auto numCols = static_cast<int>(systemMatrix.cols());
+		// aux variable for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
+		const auto rowOffset = m_dataLength - m_smoothingOrder;
+
+		for (int row = m_dataLength; row < numRows; row++)
+		{
+
+			for (int col = 0; col < numCols; col++)
+			{
+				// aux variables for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
+				const auto colOffset = row - m_dataLength;
+				const auto upperRowLength = m_smoothingOrder - col + 1;
+				const auto lowerRowBeginCol = col;
+
+				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(v,0)
+				auto rho = std::pow(systemMatrix(col + colOffset, 0), 2) + std::pow(systemMatrix(row, col), 2);
+				rho = std::sqrt(rho);
+				if (systemMatrix(col + colOffset, 0) < 0)
+				{
+					rho = -rho;
+				}
+				// store the coefficients
+				m_givensCoeffs.C(row - rowOffset, col) = systemMatrix(col + colOffset, 0) / rho;
+				m_givensCoeffs.S(row - rowOffset, col) = systemMatrix(row, col) / rho;
+				// update the system matrix accordingly, i.e. apply the just computed Givens rotation to the corresponding matrix rows
+				eliminateSystemMatrixEntry(systemMatrix, row, col);
+			}
+		}
 	}
 
 
@@ -36,7 +71,7 @@ namespace HOMS
 		}
 	}
 
-	Eigen::MatrixXd PcwSmoothPartitioning::computeSystemMatrix() const
+	Eigen::MatrixXd PcwSmoothPartitioning::createSystemMatrix() const
 	{
 		/* Example for k = 2, beta = 1
 			systemMatrix = [ 1  0  0
@@ -88,7 +123,7 @@ namespace HOMS
 			return;
 		}
 
-		// aux variables for compensating systemMatrix being stored sparsely (see member fct computeSystemMatrix)
+		// aux variables for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
 		const auto rowOffset = m_dataLength - m_smoothingOrder;
 		const auto colOffset = row - m_dataLength;
 		const auto upperRowLength = m_smoothingOrder - col + 1;
@@ -105,7 +140,7 @@ namespace HOMS
 		systemMatrix.block(row, lowerRowBeginCol, 1, upperRowLength) = -s * upperMatRow + c * lowerMatRow;
 	}
 
-	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(IntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
+	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
 	{
 		const auto leftBound = segment->leftBound;
 		const auto rightBound = segment->rightBound;
@@ -124,14 +159,14 @@ namespace HOMS
 		}
 	}
 
-	std::unique_ptr<IntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
 	{
-		return std::make_unique<IntervalSmooth>(IntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty));
+		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty));
 	}
 
-	std::unique_ptr<IntervalBase> PcwSmoothPartitioning::createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
 	{
 
-		return std::make_unique<IntervalSmooth>(IntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));
+		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));
 	}
 }

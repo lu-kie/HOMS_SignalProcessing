@@ -1,23 +1,25 @@
 #include <gtest/gtest.h>
-#include "Interval.h"
-#include "HigherOrderMS_1D.h"
+#include "HelperStructs.h"
 #include "PcwPolynomialPartitioning.h"
 #include "PcwSmoothPartitioning.h"
 
 namespace HOMS
 {
-	TEST(HOMS, intervalApproxErrorPcwPolynomial)
+	TEST(ApproxIntervalPolynomial, approxError)
 	{
 		// fit quadratic polynomial to parabolic data: expect zero approximation error
 		const int leftBound = 2;
 		double dataPoint = 0.0;
 		int polynomialOrder = 3;
-		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
+		int fullDataLength = 6;
 
-		auto quadraticRegressionInterval = Interval(leftBound, dataPoint, polynomialOrder, smoothnessPenalty);
+		auto quadraticRegressionInterval = ApproxIntervalPolynomial(leftBound, dataPoint, polynomialOrder);
 		EXPECT_EQ(quadraticRegressionInterval.size(), 1);
 
-		const auto quadraticGivensCoeffs = GivensCoefficients(6, polynomialOrder, smoothnessPenalty);
+		auto dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, fullDataLength);
+		dummyGivensProvider.initialize();
+
+		const auto quadraticGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
 		for (const double newDataPoint : {1, 4, 9, 16, 25})
 		{
 			quadraticRegressionInterval.addNewDataPoint(quadraticGivensCoeffs, newDataPoint);
@@ -27,8 +29,12 @@ namespace HOMS
 
 		// fit linear polynomial to parabolic data: linear regression f(x) = 5x-13.33
 		polynomialOrder = 2;
-		auto linearRegressionInterval = Interval(leftBound, dataPoint, polynomialOrder, smoothnessPenalty);
-		const auto linearGivensCoeffs = GivensCoefficients(6, polynomialOrder, smoothnessPenalty);
+		auto linearRegressionInterval = ApproxIntervalPolynomial(leftBound, dataPoint, polynomialOrder);
+
+		dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, fullDataLength);
+		dummyGivensProvider.initialize();
+		const auto linearGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
+
 		for (const double newDataPoint : {1, 4, 9, 16, 25})
 		{
 			linearRegressionInterval.addNewDataPoint(linearGivensCoeffs, newDataPoint);
@@ -36,44 +42,50 @@ namespace HOMS
 		const double expectedApproxError = std::pow(3.33, 2) + std::pow(1 - 1.67, 2) + std::pow(4 - 6.67, 2)
 			+ std::pow(9 - 11.67, 2) + std::pow(16 - 16.67, 2) + std::pow(25 - 21.67, 2);
 		EXPECT_NEAR(linearRegressionInterval.approxError, expectedApproxError, 1e-4);
-		EXPECT_EQ(quadraticRegressionInterval.size(), 6);
+		EXPECT_EQ(quadraticRegressionInterval.size(), fullDataLength);
 	}
 
-	TEST(HOMS, intervalApproxErrorHigherOrderMS)
+	TEST(ApproxIntervalSmooth, approxError)
 	{
 		// fit third order discrete spline to parabolic data: expect zero approximation error
 		const int leftBound = 2;
 		const double dataPoint = 0.0;
 		const int smoothingOrder = 3;
 		const auto smoothnessPenalty = 3;
+		int fullDataLength = 6;
 
-		auto thirdOrderSplineInterval = Interval(leftBound, dataPoint, smoothingOrder, smoothnessPenalty);
+		auto thirdOrderSplineInterval = ApproxIntervalSmooth(leftBound, dataPoint, smoothingOrder, smoothnessPenalty);
+
 		EXPECT_EQ(thirdOrderSplineInterval.size(), 1);
 
-		const auto thirdOrderSplineGivensCoeffs = GivensCoefficients(6, smoothingOrder, smoothnessPenalty);
+		auto dummyGivensProvider = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, fullDataLength);
+		dummyGivensProvider.initialize();
+		const auto thirdOrderSplineGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
 		for (const double newDataPoint : {1, 4, 9, 16, 25})
 		{
 			thirdOrderSplineInterval.addNewDataPoint(thirdOrderSplineGivensCoeffs, newDataPoint);
 			EXPECT_NEAR(thirdOrderSplineInterval.approxError, 0, 1e-12);
 		}
-		EXPECT_EQ(thirdOrderSplineInterval.size(), 6);
+		EXPECT_EQ(thirdOrderSplineInterval.size(), fullDataLength);
 	}
 
-	TEST(HOMS, intervalApplyGivensRotationToDataPcwPolynomial)
+	TEST(ApproxIntervalPolynomial, applyGivensRotationToData)
 	{
 		// fit quadratic polynomial to parabolic data: expect perfect fit
 		const int dataLength = 6;
 		Eigen::VectorXd intervalData = Eigen::VectorXd::Zero(dataLength);
 		intervalData << 0, 1, 4, 9, 16, 25;
 		int polynomialOrder = 3;
-		const auto smoothnessPenalty = std::numeric_limits<double>::infinity();
-		const int leftBound = 2;
-		const int rightBound = 7;
+		const int leftBound = 0;
+		const int rightBound = 5;
 
-		auto quadraticRegressionInterval = Interval(leftBound, rightBound, polynomialOrder, smoothnessPenalty, intervalData);
-		const auto quadraticGivensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
+		auto quadraticRegressionInterval = ApproxIntervalPolynomial(leftBound, rightBound, intervalData, polynomialOrder);
 
-		Eigen::MatrixXd Rquadratic = computeSystemMatrix(dataLength, polynomialOrder, smoothnessPenalty);
+		auto dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
+		dummyGivensProvider.initialize();
+		const auto quadraticGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
+
+		Eigen::MatrixXd Rquadratic = dummyGivensProvider.createSystemMatrix();
 		for (int row = 0; row < dataLength; row++)
 		{
 			for (int col = 0; col < polynomialOrder; col++)
@@ -104,9 +116,11 @@ namespace HOMS
 
 		// fit linear polynomial to parabolic data: linear regression f(x) = 5x-8.333 when x=1,...,6
 		polynomialOrder = 2;
-		auto linearRegressionInterval = Interval(leftBound, rightBound, polynomialOrder, smoothnessPenalty, intervalData);
-		const auto linearGivensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
-		Eigen::MatrixXd Rlinear = computeSystemMatrix(dataLength, polynomialOrder, smoothnessPenalty);
+		auto linearRegressionInterval = ApproxIntervalPolynomial(leftBound, rightBound, intervalData, polynomialOrder);
+		dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
+		dummyGivensProvider.initialize();
+		const auto linearGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
+		Eigen::MatrixXd Rlinear = dummyGivensProvider.createSystemMatrix();
 		for (int row = 0; row < dataLength; row++)
 		{
 			for (int col = 0; col < polynomialOrder; col++)
@@ -134,7 +148,7 @@ namespace HOMS
 		EXPECT_NEAR(linearPolyCoeff(1), -8.333, 1e-3);
 	}
 
-	TEST(HOMS, intervalApplyGivensRotationToDataHigherMS)
+	TEST(ApproxIntervalSmooth, applyGivensRotationToData)
 	{
 		// fit third order discrete spline to parabolic data: expect perfect fit
 		const int dataLength = 7;
@@ -143,11 +157,10 @@ namespace HOMS
 		int smoothingOrder = 3;
 		double smoothnessPenalty = 1;
 
-		const int leftBound = 2;
-		const int rightBound = 8;
+		const int leftBound = 0;
+		const int rightBound = 6;
 
-		auto thirdOrderDiscreteSplineInterval = Interval(leftBound, rightBound, smoothingOrder, smoothnessPenalty, intervalData);
-		const auto thirdOrderDiscreteSplineGivensCoeffs = GivensCoefficients(dataLength, smoothingOrder, smoothnessPenalty);
+		auto thirdOrderDiscreteSplineInterval = ApproxIntervalSmooth(leftBound, rightBound, intervalData, smoothingOrder, smoothnessPenalty);
 
 		Eigen::MatrixXd fullSystemMatrix(2 * dataLength - smoothingOrder, dataLength);
 		fullSystemMatrix <<
@@ -165,19 +178,27 @@ namespace HOMS
 
 		int colOffset = 0;
 		const int rowOffset = dataLength - smoothingOrder;
-		for (int row = dataLength; row < fullSystemMatrix.rows(); row++)
-		{
-			for (int col = colOffset; col < colOffset + smoothingOrder + 1; col++)
-			{
-				thirdOrderDiscreteSplineInterval.applyGivensRotationToData(thirdOrderDiscreteSplineGivensCoeffs, row, col - colOffset, rowOffset, colOffset);
 
-				const auto c = thirdOrderDiscreteSplineGivensCoeffs.C(row - rowOffset, col - colOffset);
-				const auto s = thirdOrderDiscreteSplineGivensCoeffs.S(row - rowOffset, col - colOffset);
-				// eliminate matrix entry (row,col)
-				const Eigen::VectorXd pivotRow = fullSystemMatrix.row(col);
-				const Eigen::VectorXd targetRow = fullSystemMatrix.row(row);
-				fullSystemMatrix.row(col) = c * pivotRow + s * targetRow;
-				fullSystemMatrix.row(row) = -s * pivotRow + c * targetRow;
+		auto dummyGivensProvider = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		dummyGivensProvider.initialize();
+		const auto thirdOrderDiscreteSplineGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
+		for (int row = 0; row < fullSystemMatrix.rows(); row++)
+		{
+			for (int col = 0; col < smoothingOrder + 1; col++)
+			{
+				thirdOrderDiscreteSplineInterval.applyGivensRotationToData(thirdOrderDiscreteSplineGivensCoeffs, row, col);
+
+				if (row >= dataLength)
+				{
+					const auto c = thirdOrderDiscreteSplineGivensCoeffs.C(row - dataLength + smoothingOrder, col);
+					const auto s = thirdOrderDiscreteSplineGivensCoeffs.S(row - dataLength + smoothingOrder, col);
+					// eliminate matrix entry (row,col)
+					const Eigen::VectorXd pivotRow = fullSystemMatrix.row(col - dataLength + row);
+					const Eigen::VectorXd targetRow = fullSystemMatrix.row(row);
+					fullSystemMatrix.row(col - dataLength + row) = c * pivotRow + s * targetRow;
+					fullSystemMatrix.row(row) = -s * pivotRow + c * targetRow;
+				}
+
 			}
 			colOffset++;
 		}
@@ -187,14 +208,14 @@ namespace HOMS
 		EXPECT_TRUE(intervalData.isApprox(smoothedData, 1e-12));
 	}
 
-	TEST(PcwPolynomialPartitioning, computeSystemMatrix)
+	TEST(PcwPolynomialPartitioning, createSystemMatrix)
 	{
 		const int dataLength = 10;
 
 		for (int polynomialOrder = 1; polynomialOrder < 10; polynomialOrder++)
 		{
 			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
-			const auto sysMatrix = pcwImpl.computeSystemMatrix();
+			const auto sysMatrix = pcwImpl.createSystemMatrix();
 			// check size
 			EXPECT_EQ(sysMatrix.rows(), dataLength);
 			EXPECT_EQ(sysMatrix.cols(), polynomialOrder);
@@ -212,7 +233,7 @@ namespace HOMS
 		}
 	}
 
-	TEST(PcwPolynomialPartitioning, createGivensCoefficients)
+	TEST(PcwPolynomialPartitioning, computeGivensCoefficients)
 	{
 		const int dataLength = 4;
 		const int polynomialOrder = 3;
@@ -223,7 +244,8 @@ namespace HOMS
 			16, 4, 1;
 
 		auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
-		const auto givensCoeffs = pcwImpl.createGivensCoefficients();
+		pcwImpl.initialize();
+		const auto givensCoeffs = pcwImpl.m_givensCoeffs;
 
 		// use the computed Givens coefficients to obtain a QR decomposition of systemMatrix
 		Eigen::MatrixXd R = systemMatrix;
@@ -264,8 +286,8 @@ namespace HOMS
 
 		// quadratic regression for parabolic data -> expect only zero optimal energies
 		int polynomialOrder = 3;
-		const auto givensCoeffsQuadratic = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
-		auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, givensCoeffsQuadratic);
+		auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
+		pcwImpl.initialize();
 		const auto quadraticApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
 		for (const auto& err : quadraticApproximationErrors)
 		{
@@ -274,8 +296,8 @@ namespace HOMS
 
 		// linear regression for parabolic data
 		polynomialOrder = 2;
-		const auto givensCoeffsLinear = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
-		pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, givensCoeffsLinear);
+		pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
+		pcwImpl.initialize();
 		const auto linearApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
 
 		// aux function for verifying the results
@@ -323,14 +345,14 @@ namespace HOMS
 		int dataLength = 10;
 		int polynomialOrder = 1;
 		auto smoothnessPenalty = std::numeric_limits<double>::infinity();
-		auto givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
 
 		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
 		data << 1, 1, 1, 1, 1, 10, 10, 10, 10, 10;
 
 		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 		{
-			const auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+			pcwImpl.initialize();
 			const auto foundPartition = pcwImpl.findOptimalPartition(data);
 			if (jumpPenalty < 202.5)
 			{
@@ -350,7 +372,8 @@ namespace HOMS
 		// single element segments are optimal for zero jumpPenalty
 		data << 1, 2, 3, 4, 5, 6, 7, 8, 9, 10;
 		double jumpPenalty = 0;
-		auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+		auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+		pcwImpl.initialize();
 		auto foundPartition = pcwImpl.findOptimalPartition(data);
 
 		EXPECT_EQ(foundPartition.size(), dataLength);
@@ -362,10 +385,10 @@ namespace HOMS
 		// only one segment for constant data 
 		dataLength = 1000;
 		Eigen::VectorXd constantData = 80 * Eigen::VectorXd::Ones(dataLength);
-		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
 		for (const double& jumpPenalty : { 0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0 })
 		{
-			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+			pcwImpl.initialize();
 			foundPartition = pcwImpl.findOptimalPartition(constantData);
 			EXPECT_EQ(foundPartition.size(), 1);
 			EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
@@ -375,15 +398,17 @@ namespace HOMS
 		dataLength = 10;
 		polynomialOrder = 3;
 		smoothnessPenalty = std::numeric_limits<double>::infinity();
-		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
 
 		data = Eigen::VectorXd::Zero(dataLength);
 		data << 0, 1, 4, 9, 16, -4, -9, -16, -25, -36;
-		const auto noJumpEnergy = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, givensCoeffs).computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+		auto dummyPcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength);
+		dummyPcwImpl.initialize();
+		const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
 
 		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 		{
-			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+			pcwImpl.initialize();
 			const auto foundPartition = pcwImpl.findOptimalPartition(data);
 
 			if (jumpPenalty < noJumpEnergy)
@@ -404,7 +429,8 @@ namespace HOMS
 		// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
 		data << 1, -1, 1, -1, 1, -1, 1, -1, 1, -1;
 		jumpPenalty = 1e-8;
-		pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+		pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+		pcwImpl.initialize();
 		foundPartition = pcwImpl.findOptimalPartition(data);
 
 		EXPECT_EQ(foundPartition.size(), 4);
@@ -421,10 +447,10 @@ namespace HOMS
 		// only one segment for quadratic data
 		dataLength = 1000;
 		constantData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
-		givensCoeffs = GivensCoefficients(dataLength, polynomialOrder, smoothnessPenalty);
 		for (const double& jumpPenalty : { 0.001,0.01,0.1, 1.0,10.0,100.0,1000.0 })
 		{
-			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, givensCoeffs);
+			pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
+			pcwImpl.initialize();
 			foundPartition = pcwImpl.findOptimalPartition(constantData);
 			EXPECT_EQ(foundPartition.segments.size(), 1);
 			EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
@@ -432,13 +458,13 @@ namespace HOMS
 
 	}
 
-	TEST(PcwSmoothPartitioning, computeSystemMatrix)
+	TEST(PcwSmoothPartitioning, createSystemMatrix)
 	{
 		const int dataLength = 10;
 		const double smoothnessPenalty = 2;
 		const int smoothingOrder = 3;
 		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
-		const auto sysMatrix = pcwPartImpl.computeSystemMatrix();
+		const auto sysMatrix = pcwPartImpl.createSystemMatrix();
 
 		// check size
 		EXPECT_EQ(sysMatrix.rows(), 2 * dataLength - smoothingOrder);
@@ -462,7 +488,7 @@ namespace HOMS
 		}
 	}
 
-	TEST(PcwSmoothPartitioning, createGivensCoefficients)
+	TEST(PcwSmoothPartitioning, computeGivensCoefficients)
 	{
 		const int dataLength = 5;
 		const int smoothingOrder = 2;
@@ -479,7 +505,8 @@ namespace HOMS
 			0, 0, 4, -8, 4;
 
 		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
-		const auto givensCoeffs = pcwPartImpl.createGivensCoefficients();
+		pcwPartImpl.initialize();
+		const auto givensCoeffs = pcwPartImpl.m_givensCoeffs;
 
 		// use the computed Givens coefficients to obtain a QR decomposition of fullSystemMatrix
 		// we need to incorporate offsets as the Givens coefficients are arranged w.r.t. the sparse representation of the system matrix
@@ -520,8 +547,8 @@ namespace HOMS
 		const int smoothingOrder = 3;
 		const auto smoothnessPenalty = 4;
 		const int dataLength = 6;
-		const auto givensCoeffs = GivensCoefficients(dataLength, smoothingOrder, smoothnessPenalty);
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, givensCoeffs);
+		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		pcwImpl.initialize();
 
 		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
 		data << 0, 1, 4, 9, 16, 25;
@@ -539,15 +566,17 @@ namespace HOMS
 		int dataLength = 10;
 		const int smoothingOrder = 3;
 		auto smoothnessPenalty = 20;
-		auto givensCoeffs = GivensCoefficients(dataLength, smoothingOrder, smoothnessPenalty);
 
 		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
 		data << 0, 1, 4, 9, 16, -4, -9, -16, -25, -36;
-		const auto noJumpEnergy = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, givensCoeffs).computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+		auto dummyPcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		dummyPcwImpl.initialize();
+		const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
 
 		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 		{
-			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, givensCoeffs);
+			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
+			pcwImpl.initialize();
 			const auto foundPartition = pcwImpl.findOptimalPartition(data);
 
 			if (jumpPenalty < noJumpEnergy)
@@ -568,7 +597,8 @@ namespace HOMS
 		// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
 		data << 1, -1, 1, -1, 1, -1, 1, -1, 1, -1;
 		double jumpPenalty = 1e-8;
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, givensCoeffs);
+		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
+		pcwImpl.initialize();
 		auto foundPartition = pcwImpl.findOptimalPartition(data);
 
 		EXPECT_EQ(foundPartition.size(), 4);
@@ -590,8 +620,8 @@ namespace HOMS
 		{
 			for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
 			{
-				givensCoeffs = GivensCoefficients(dataLength, smoothingOrder, smoothnessPenalty);
-				pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, givensCoeffs);
+				pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
+				pcwImpl.initialize();
 				auto errs = pcwImpl.computeOptimalEnergiesNoSegmentation(quadraticData);
 				auto foundPartition = pcwImpl.findOptimalPartition(quadraticData);
 				EXPECT_EQ(foundPartition.size(), 1);
@@ -634,13 +664,13 @@ namespace HOMS
 			const double jumpPenalty = 50;
 
 			Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
-			
+
 			data << 0, 1, 4, 9, 16, 25, 100, 90, 80, 70, 60, 50, 40, 30, 20;
 
 			Partitioning expectedPartition;
 			expectedPartition.segments.push_back(Segment(0, 5));
 			expectedPartition.segments.push_back(Segment(6, 14));
-			
+
 
 			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength);
 			auto [pcwPolynomialResult, partition] = pcwImpl.applyToData(data);

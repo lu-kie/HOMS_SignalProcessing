@@ -1,6 +1,6 @@
 #include <iostream>
 #include <limits>
-#include "HigherOrderMS_1D.h"
+#include "HelperStructs.h"
 #include "PcwSmoothPartitioningBase.h"
 
 int main(int argc, char* argv[])
@@ -10,7 +10,7 @@ int main(int argc, char* argv[])
 	const int n = 15;
 	const int k = 2;
 	const double beta = 1;// std::numeric_limits<double>::infinity();
-	const auto m = HOMS::computeSystemMatrix(n, k, beta);
+	const auto m = HOMS::createSystemMatrix(n, k, beta);
 	std::string sep = "\n----------------------------------------\n";
 	std::cout << m << sep;
 	return 0;

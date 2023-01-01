@@ -1,6 +1,5 @@
 #pragma once
-#include "HigherOrderMS_1D.h"
-#include "Interval.h"
+#include "HelperStructs.h"
 #include <Eigen/Dense>
 
 namespace HOMS
@@ -36,44 +35,46 @@ namespace HOMS
 			m_initialized = true;
 		}
 
+		/// @brief Initializes the Givens coefficients. 
+		/// Is automatically called when data comes in and the coefficients haven't been initialized.
+		/// It is recommended to call this fct. from outside if several data sets shall be processed in parallel.
+		void initialize();
+
 		/// @brief Apply partitioning and pcw. smoothing to data
 		/// @param data 
 		/// @return optimal partitioning and corresponding pcw. smoothed signal
 		std::pair<Eigen::VectorXd, Partitioning> applyToData(Eigen::VectorXd& data);
 
 	protected:
-		/// @brief 
-		void initialize();
-
 		/// @brief Get the smallest size of a normal partitioning's segment
 		/// @return 
 		virtual int minSegmentSize() const = 0;
 
 		/// @brief 
 		/// @return 
-		virtual Eigen::MatrixXd computeSystemMatrix() const = 0;
+		virtual Eigen::MatrixXd createSystemMatrix() const = 0;
 
 		/// @brief 
 		/// @return 
-		virtual GivensCoefficients createGivensCoefficients() const = 0;
-
-		/// @brief 
-		/// @param leftBound 
-		/// @param newDataPoint 
-		/// @return 
-		virtual std::unique_ptr<IntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const = 0;
+		virtual void computeGivensCoefficients() = 0;
 
 		/// @brief 
 		/// @param leftBound 
 		/// @param newDataPoint 
 		/// @return 
-		virtual std::unique_ptr<IntervalBase> createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const = 0;
+
+		/// @brief 
+		/// @param leftBound 
+		/// @param newDataPoint 
+		/// @return 
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const = 0;
 
 		/// @brief 
 		/// @param segment 
 		/// @param resultToBeFilled 
 		/// @param partialUpperTriMat 
-		virtual void fillSegmentFromPartialUpperTriangularSystemMatrix(IntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const = 0;
+		virtual void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const = 0;
 
 		/// @brief Eliminate an entry of the system matrix
 		/// @param systemMatrix 
@@ -96,7 +97,6 @@ namespace HOMS
 		GivensCoefficients m_givensCoeffs{}; ///<
 
 	private:
-
 		/// @brief 
 		/// @param partition 
 		/// @param minSegmentSize
@@ -104,7 +104,7 @@ namespace HOMS
 		/// @param pcwPolynomialResult 
 		/// @param polynomialOrder 
 		/// @return 
-		std::vector<std::unique_ptr<IntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const;
+		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const;
 
 		/// @brief 
 		/// @param partition 

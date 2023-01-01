@@ -1,5 +1,5 @@
 #include "PcwSmoothPartitioningBase.h"
-#include "Interval.h"
+#include "HelperStructs.h"
 
 namespace HOMS
 {
@@ -21,7 +21,11 @@ namespace HOMS
 
 	void PcwSmoothPartitioningBase::initialize()
 	{
-		m_givensCoeffs = createGivensCoefficients();
+		if (m_initialized)
+		{
+			return;
+		}
+		computeGivensCoefficients();
 		m_initialized = true;
 	}
 
@@ -43,7 +47,7 @@ namespace HOMS
 	/// @brief Aux functions for fct findBestPartition
 	namespace
 	{
-		bool updateIntervalToRightBoundOrEraseIt(IntervalBase& interval, const std::vector<double>& optimalEnergies,
+		bool updateIntervalToRightBoundOrEraseIt(ApproxIntervalBase& interval, const std::vector<double>& optimalEnergies,
 			const Eigen::VectorXd& data, const int rightBound, const GivensCoefficients& givensCoeffs)
 		{
 			while (interval.rightBound < rightBound)
@@ -65,7 +69,7 @@ namespace HOMS
 			return false;
 		}
 
-		void updateOptimalEnergyForRightBound(std::vector<double>& optimalEnergies, std::vector<int>& jumpsTracker, const IntervalBase& interval, const int dataRightBound, const double jumpPenalty)
+		void updateOptimalEnergyForRightBound(std::vector<double>& optimalEnergies, std::vector<int>& jumpsTracker, const ApproxIntervalBase& interval, const int dataRightBound, const double jumpPenalty)
 		{
 			// Check if the current interval yields an improved energy value
 			const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 1] + jumpPenalty + interval.approxError;
@@ -89,7 +93,7 @@ namespace HOMS
 		std::vector<int> jumpsTracker(m_dataLength, -1);
 
 		// container for the candidate segments, i.e., discrete intervals
-		std::list<std::unique_ptr<IntervalBase>> segments; // note: erasing from the middle of a list is cheaper than from a vector
+		std::list<std::unique_ptr<ApproxIntervalBase>> segments; // note: erasing from the middle of a list is cheaper than from a vector
 		segments.push_back(createIntervalForPartitionFinding(1, data(1)));
 
 		for (int dataRightBound = 1; dataRightBound < m_dataLength; dataRightBound++)
@@ -130,9 +134,9 @@ namespace HOMS
 		return Partitioning(jumpsTracker);
 	}
 
-	std::vector<std::unique_ptr<IntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const
+	std::vector<std::unique_ptr<ApproxIntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const
 	{
-		std::vector<std::unique_ptr<IntervalBase>> Intervals;
+		std::vector<std::unique_ptr<ApproxIntervalBase>> Intervals;
 		Intervals.reserve(partition.size());
 		for (const auto& segment : partition.segments)
 		{
@@ -175,7 +179,7 @@ namespace HOMS
 
 		// Solve the linear equation systems corresponding to each interval
 		// Declare sparse system matrix of underlying least squares problem
-		auto systemMatrix = computeSystemMatrix();
+		auto systemMatrix = createSystemMatrix();
 
 		// The iterator knowing which intervals have to be considered (i.e. which interval lengths)
 		auto beginOfUnfinishedSegments = Intervals.begin();
