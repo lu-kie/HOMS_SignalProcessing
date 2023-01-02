@@ -21,23 +21,6 @@ namespace HOMS
 			}
 		}
 
-		PcwSmoothPartitioning(const int smoothingOrder, const double smoothnessPenalty, const double jumpPenalty, const int dataLength, const GivensCoefficients& givensCoeffs)
-			: PcwSmoothPartitioningBase(jumpPenalty, dataLength, givensCoeffs)
-			, m_smoothingOrder{ smoothingOrder }
-			, m_smoothnessPenalty{ smoothnessPenalty }
-		{
-			if (m_smoothingOrder < 0 || m_smoothnessPenalty < 0)
-			{
-				throw std::invalid_argument("Requested smoothing order and smoothness penalty must be > 0");
-			}
-			
-			if (givensCoeffs.C.rows() < m_dataLength)
-			{
-				throw std::invalid_argument("Provided Givens coefficients must be created for same or larger data length");
-			}
-		}
-
-
 	private:
 		int minSegmentSize() const;
 		void computeGivensCoefficients();

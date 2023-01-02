@@ -19,22 +19,6 @@ namespace HOMS
 			}
 		}
 
-		PcwPolynomialPartitioning(const int polynomialOrder, const double jumpPenalty, const int dataLength, const GivensCoefficients& givensCoeffs)
-			: PcwSmoothPartitioningBase(jumpPenalty, dataLength, givensCoeffs)
-			, m_polynomialOrder{ polynomialOrder }
-		{
-			if (m_polynomialOrder < 0)
-			{
-				throw std::invalid_argument("Requested polynomial order must be > 0");
-			}
-
-			if (givensCoeffs.C.rows() < m_dataLength)
-			{
-				throw std::invalid_argument("Provided Givens coefficients must be created for same or larger data length");
-			}
-		}
-
-
 	private:
 		int minSegmentSize() const;
 		void computeGivensCoefficients();
