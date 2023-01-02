@@ -1,7 +1,7 @@
 #include "PcwSmoothPartitioningBase.h"
 #include "HelperStructs.h"
 
-namespace HOMS
+namespace homs
 {
 	std::pair<Eigen::VectorXd, Partitioning> PcwSmoothPartitioningBase::applyToData(Eigen::VectorXd& data)
 	{
@@ -64,7 +64,6 @@ namespace HOMS
 					// Extend current interval by new data and update its approximation error with Givens rotations
 					interval.addNewDataPoint(givensCoeffs, data[interval.rightBound + 1]);
 				}
-
 			}
 			return false;
 		}
@@ -150,7 +149,7 @@ namespace HOMS
 				resultToBeFilled.segment(leftBound, segmentSize) = data.segment(leftBound, segmentSize);
 				continue;
 			}
-			Intervals.push_back(createIntervalForComputingPcwSmoothSignal(leftBound, rightBound, data));
+			Intervals.push_back(createIntervalForComputingResult(leftBound, rightBound, data));
 		};
 
 		// sort in size-ascending order

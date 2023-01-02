@@ -4,11 +4,15 @@
 #include "HelperStructs.h"
 #include <gtest/gtest.h>
 
-namespace HOMS
+namespace homs
 {
 	class PcwPolynomialPartitioning : public PcwSmoothPartitioningBase
 	{
 	public:
+		/// @brief Constructor from partition model parameters
+		/// @param polynomialOrder order of the polynomial on each segment
+		/// @param jumpPenalty costs for introducing new segments
+		/// @param dataLength length of incoming data
 		PcwPolynomialPartitioning(const int polynomialOrder, const double jumpPenalty, const int dataLength)
 			: PcwSmoothPartitioningBase(jumpPenalty, dataLength)
 			, m_polynomialOrder{ polynomialOrder }
@@ -26,9 +30,9 @@ namespace HOMS
 		void eliminateSystemMatrixEntry(Eigen::MatrixXd& systemMatrix, int row, int col) const;
 		void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const;
 		std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const;
-		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const;
+		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const;
 
-		int m_polynomialOrder{ 1 };
+		int m_polynomialOrder{ 1 }; ///< order of the piecewise polynomial partitioning and smoothing (1: constant, 2: affine linear etc.)
 
 		// unit tests
 		FRIEND_TEST(ApproxIntervalPolynomial, approxError);

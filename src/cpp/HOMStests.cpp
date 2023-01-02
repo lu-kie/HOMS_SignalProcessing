@@ -3,7 +3,7 @@
 #include "PcwPolynomialPartitioning.h"
 #include "PcwSmoothPartitioning.h"
 
-namespace HOMS
+namespace homs
 {
 	TEST(ApproxIntervalPolynomial, approxError)
 	{

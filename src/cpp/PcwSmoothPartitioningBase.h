@@ -2,12 +2,12 @@
 #include "HelperStructs.h"
 #include <Eigen/Dense>
 
-namespace HOMS
+namespace homs
 {
 	class PcwSmoothPartitioningBase
 	{
 	public:
-		/// @brief 
+		/// @brief Create base partitioning object with specified jump penalty and data length
 		/// @param jumpPenalty 
 		/// @param dataLength 
 		PcwSmoothPartitioningBase(const double jumpPenalty, const int dataLength)
@@ -24,56 +24,45 @@ namespace HOMS
 			}
 		}
 
-		/// @brief 
-		/// @param jumpPenalty 
-		/// @param dataLength 
-		/// @param givensCoeffs 
-		PcwSmoothPartitioningBase(const double jumpPenalty, const int dataLength, const GivensCoefficients& givensCoeffs)
-			: PcwSmoothPartitioningBase(jumpPenalty, dataLength)
-		{
-			m_givensCoeffs = givensCoeffs;
-			m_initialized = true;
-		}
-
 		/// @brief Initializes the Givens coefficients. 
 		/// Is automatically called when data comes in and the coefficients haven't been initialized.
 		/// It is recommended to call this fct. from outside if several data sets shall be processed in parallel.
 		void initialize();
 
-		/// @brief Apply partitioning and pcw. smoothing to data
+		/// @brief Apply the partitioning and the corresponding piecewise smoothing to data
 		/// @param data 
 		/// @return optimal partitioning and corresponding pcw. smoothed signal
 		std::pair<Eigen::VectorXd, Partitioning> applyToData(Eigen::VectorXd& data);
 
 	protected:
 		/// @brief Get the smallest size of a normal partitioning's segment
-		/// @return 
+		/// @return min segment size
 		virtual int minSegmentSize() const = 0;
 
-		/// @brief 
-		/// @return 
+		/// @brief Create the full system marix
+		/// @return system matrix
 		virtual Eigen::MatrixXd createSystemMatrix() const = 0;
 
-		/// @brief 
-		/// @return 
+		/// @brief Compute the Givens coefficients needed for a QR composition of the full system matrix
 		virtual void computeGivensCoefficients() = 0;
 
-		/// @brief 
-		/// @param leftBound 
-		/// @param newDataPoint 
-		/// @return 
+		/// @brief Create a new interval object as needed in the dynamic programming scheme in findOptimalPartition
+		/// @param leftBound left bound of the (single-point) interval
+		/// @param newDataPoint data point corresponding to left bound
+		/// @return interval object
 		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const = 0;
 
-		/// @brief 
-		/// @param leftBound 
-		/// @param newDataPoint 
-		/// @return 
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const = 0;
+		/// @brief Create an interval object as needed in the smooth signal reconstruction process
+		/// @param leftBound left bound of the interval
+		/// @param rightBound right bound of the interval 
+		/// @param data full data
+		/// @return interval object
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const = 0;
 
-		/// @brief 
+		/// @brief Compute the best approximating smooth signal for the segment by performing back substition on the partial (full length) upper triangular system matrix
 		/// @param segment 
 		/// @param resultToBeFilled 
-		/// @param partialUpperTriMat 
+		/// @param partialUpperTriMat partial upper triangular system matrix which yields the best approximating signal on the given segment
 		virtual void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const = 0;
 
 		/// @brief Eliminate an entry of the system matrix
@@ -82,37 +71,37 @@ namespace HOMS
 		/// @param col col index of the entry
 		virtual void eliminateSystemMatrixEntry(Eigen::MatrixXd& systemMatrix, int row, int col) const = 0;
 
-		/// @brief 
+		/// @brief Compute the best approximation errors for data(0..r), r=1..dataLength
 		/// @param data 
-		/// @return 
+		/// @return best approximation errors
 		std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::VectorXd& data) const;
 
-		/// @brief 
+		/// @brief Run the dynamic programming scheme to find an optimal partition of the input data
 		/// @param data 
-		/// @return 
+		/// @return optimal partition into (discrete) intervals
 		Partitioning findOptimalPartition(Eigen::VectorXd& data) const;
 
 	protected:
-		int m_dataLength{ 0 }; ///<
-		GivensCoefficients m_givensCoeffs{}; ///<
+		int m_dataLength{ 0 }; ///< number of data points of incoming data
+		GivensCoefficients m_givensCoeffs{}; ///< the Givens coefficients for obtaining a QR decomposition from the underlying system matrices. They further yield the recursion coefficients for the dynamic programming scheme
 
 	private:
-		/// @brief 
+
+		/// @brief Create interval objects corresponding to the segments of the input partition. Trivially short segments will instead be filled immediately with data (resultToBeFilled)
 		/// @param partition 
-		/// @param minSegmentSize
+		/// @param minSegmentSize 
 		/// @param data 
-		/// @param pcwPolynomialResult 
-		/// @param polynomialOrder 
-		/// @return 
+		/// @param resultToBeFilled 
+		/// @return vector of intervals
 		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const;
 
-		/// @brief 
+		/// @brief Compute the best fitting piecewise smooth/polynomial result from the found optimal partition
 		/// @param partition 
 		/// @param data 
-		/// @return 
+		/// @return piecewise smooth result
 		Eigen::VectorXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, Eigen::VectorXd& data) const;
 
-		bool m_initialized{ false };
-		double m_jumpPenalty{ std::numeric_limits<double>::infinity() };
+		bool m_initialized{ false }; ///< flag if object is initialized, i.e. if the Givens coefficients have been computed
+		double m_jumpPenalty{ std::numeric_limits<double>::infinity() }; ///< how much does introducing a new segment cost: large values give few segments and vice versa
 	};
 }

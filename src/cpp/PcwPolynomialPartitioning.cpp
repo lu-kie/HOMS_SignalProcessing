@@ -1,6 +1,6 @@
 #include "PcwPolynomialPartitioning.h"
 
-namespace HOMS
+namespace homs
 {
 	int PcwPolynomialPartitioning::minSegmentSize() const
 	{
@@ -12,12 +12,11 @@ namespace HOMS
 		m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_polynomialOrder);
 		m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_polynomialOrder);
 
+		// Compute and store the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
 		auto systemMatrix = createSystemMatrix();
-
 		const auto numRows = static_cast<int>(systemMatrix.rows());
 		const auto numCols = static_cast<int>(systemMatrix.cols());
-		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
-		// Save them in C and S
+
 		for (int row = 0; row < numRows; row++)
 		{
 			for (int col = 0; col < std::min(numCols, row); col++)
@@ -29,10 +28,9 @@ namespace HOMS
 				{
 					rho = -rho;
 				}
-				// store the coefficients
 				m_givensCoeffs.C(row, col) = systemMatrix(col, col) / rho;
 				m_givensCoeffs.S(row, col) = systemMatrix(row, col) / rho;
-				// update the system matrix accordingly, row.e. apply the Givens rotation to the corresponding matrix rows
+				// update the system matrix accordingly, i.e. apply the Givens rotation to the corresponding matrix rows
 				Eigen::MatrixXd upperMatRow = systemMatrix.row(col);
 				Eigen::MatrixXd lowerMatRow = systemMatrix.row(row);
 				systemMatrix.row(col) = m_givensCoeffs.C(row, col) * upperMatRow + m_givensCoeffs.S(row, col) * lowerMatRow;
@@ -43,13 +41,13 @@ namespace HOMS
 
 	Eigen::MatrixXd PcwPolynomialPartitioning::createSystemMatrix() const
 	{
-		/* Example for k = 3
-			A = [ 1    1  1
-				  4    2  1
-				  9    3  1
-				  ...
-				  n^2  n  1 ]
-			*/
+		/* Example for m_smoothingOrder = 3
+			systemMatrix = [ 1    1  1
+							 4    2  1
+							 9    3  1
+							 ...
+							 n^2  n  1 ]
+		*/
 		Eigen::MatrixXd systemMatrix = Eigen::MatrixXd::Ones(m_dataLength, m_polynomialOrder);
 		for (int j = m_polynomialOrder - 2; j >= 0; j--)
 		{
@@ -83,10 +81,11 @@ namespace HOMS
 		const auto& currData = segment->data;
 		const auto segmentSize = segment->size();
 		const Eigen::Index numRows = partialUpperTriMat.cols(); // = polynomial order
-		// Compute segment's polynomial coefficients
+		
+		// Compute the best fitting polynomial coefficients for the data within the segment
 		const Eigen::VectorXd polynomialCoeffs = partialUpperTriMat.topRows(numRows).triangularView<Eigen::Upper>().solve(currData.head(numRows));
 
-		// Fill the segment with values induced by the polynomial coefficients
+		// Fill the segment with the values yielded by the polynomial coefficients
 		resultToBeFilled.segment(leftBound, segmentSize).array() += polynomialCoeffs.tail(1).value();
 		Eigen::VectorXd xValues = Eigen::VectorXd::LinSpaced(segmentSize, 1, segmentSize);
 		for (int j = static_cast<int>(polynomialCoeffs.size()) - 2; j >= 0; j--)
@@ -96,13 +95,12 @@ namespace HOMS
 		}
 	}
 
-
 	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
 	{
 		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, newDataPoint, m_polynomialOrder));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const
+	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const
 	{
 		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, rightBound, data, m_polynomialOrder));
 	}

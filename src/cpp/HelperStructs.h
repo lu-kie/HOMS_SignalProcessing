@@ -1,20 +1,23 @@
 #pragma once
 #include <Eigen/Dense>
 
-namespace HOMS
+namespace homs
 {
+	/// @brief Type of regularization
 	enum class PcwRegularizationType
 	{
 		pcwSmooth,
 		pcwPolynomial
 	};
 
+	/// @brief Givens coefficients c,s for computing a QR decomposition of a matrix
 	struct GivensCoefficients
 	{
 		Eigen::MatrixXd C{};
 		Eigen::MatrixXd S{};
 	};
 
+	/// @brief Single segment of a partitioning
 	struct Segment
 	{
 		int size() const { return rightBound - leftBound + 1; }
@@ -29,6 +32,7 @@ namespace HOMS
 		}
 	};
 
+	/// @brief Discrete partitioning of the domain 0,1,...,n in segments [leftBound, rightBound]
 	struct Partitioning
 	{
 		/// @brief Default ctor
@@ -47,11 +51,17 @@ namespace HOMS
 
 	struct ApproxIntervalBase
 	{
+		/// @brief Constructor of base interval
+		/// @param leftBound 
+		/// @param rightBound 
 		ApproxIntervalBase(const int leftBound, const int rightBound)
 			: leftBound(leftBound)
 			, rightBound(rightBound)
 		{}
 
+		/// @brief Constructor of base interval for given data and left boundary
+		/// @param leftBound 
+		/// @param data 
 		ApproxIntervalBase(const int leftBound, Eigen::VectorXd&& data)
 			: leftBound(leftBound)
 			, rightBound(leftBound + static_cast<int>(data.size()) - 1)
@@ -62,7 +72,7 @@ namespace HOMS
 		/// @param leftBound 
 		/// @param dataPoint 
 		/// @param storedDataSize 
-		/// @param regularization 
+		/// @param regularization type of regularization in the interval
 		ApproxIntervalBase(const int leftBound, const double dataPoint, const int storedDataSize, const PcwRegularizationType regularization)
 			: leftBound(leftBound)
 			, rightBound(leftBound)
@@ -92,9 +102,9 @@ namespace HOMS
 		virtual void addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint) = 0;
 
 		/// @brief Update associated data i.e. sparse Givens rotate it (for pcw. smoothed signal reconstruction)
-		/// @param givensCoeffs 
-		/// @param row 
-		/// @param col 
+		/// @param givensCoeffs Givens coefficients needed for the rotation
+		/// @param row matrix row
+		/// @param col matrix column
 		virtual void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col) = 0;
 
 		int leftBound{ -1 };			  ///< left bound of discrete interval
@@ -105,11 +115,20 @@ namespace HOMS
 
 	struct ApproxIntervalPolynomial : public ApproxIntervalBase
 	{
+		/// @brief Constructor of a polynomial interval: single data point
+		/// @param leftBound 
+		/// @param dataPoint 
+		/// @param polynomialOrder 
 		ApproxIntervalPolynomial(const int leftBound, const double dataPoint, const int polynomialOrder)
 			: ApproxIntervalBase(leftBound, dataPoint, polynomialOrder, PcwRegularizationType::pcwPolynomial)
 			, polynomialOrder(polynomialOrder)
 		{}
 
+		/// @brief Constructor of a polynomial interval from full data and interval boundaries
+		/// @param leftBound 
+		/// @param rightBound 
+		/// @param fullData 
+		/// @param polynomialOrder 
 		ApproxIntervalPolynomial(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData, const int polynomialOrder)
 			: ApproxIntervalBase(leftBound, Eigen::VectorXd(fullData.segment(leftBound, rightBound - leftBound + 1)))
 			, polynomialOrder(polynomialOrder)
@@ -121,15 +140,25 @@ namespace HOMS
 		int polynomialOrder{ 1 }; ///< order of the polynomial on the interval (1: constant, 2: linear etc.)
 	};
 
-
 	struct ApproxIntervalSmooth : public ApproxIntervalBase
 	{
+		/// @brief Constructor of a smooth interval: single data point
+		/// @param leftBound 
+		/// @param dataPoint 
+		/// @param smoothingOrder 
+		/// @param smoothnessPenalty 
 		ApproxIntervalSmooth(const int leftBound, const double dataPoint, const int smoothingOrder, const double smoothnessPenalty)
 			: ApproxIntervalBase(leftBound, dataPoint, smoothingOrder, PcwRegularizationType::pcwSmooth)
 			, smoothingOrder(smoothingOrder)
 			, smoothnessPenalty(smoothnessPenalty)
 		{}
 
+		/// @brief Constructor of a smooth interval from full data and interval boundaries
+		/// @param leftBound 
+		/// @param rightBound 
+		/// @param fullData 
+		/// @param smoothingOrder 
+		/// @param smoothnessPenalty 
 		ApproxIntervalSmooth(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData, const int smoothingOrder, const double smoothnessPenalty)
 			: ApproxIntervalBase(leftBound, rightBound)
 			, smoothingOrder(smoothingOrder)

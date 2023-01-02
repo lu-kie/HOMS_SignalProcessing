@@ -1,6 +1,6 @@
 #include "HelperStructs.h"
 
-namespace HOMS
+namespace homs
 {
 	Partitioning::Partitioning(const std::vector<int>& jumpsTracker)
 	{
@@ -20,7 +20,6 @@ namespace HOMS
 		std::reverse(segments.begin(), segments.end());
 	}
 
-
 	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
 	{
 		// Aux variables
@@ -39,7 +38,6 @@ namespace HOMS
 			const auto eliminatedRowData = newDataPoint;
 			data(j) = c * pivotRowData + s * eliminatedRowData;
 			newDataPoint = -s * pivotRowData + c * eliminatedRowData;
-
 		}
 
 		const auto newIntervalLength = intervalLength + 1;
@@ -78,7 +76,6 @@ namespace HOMS
 		data(row) = -s * pivotRowData + c * eliminatedRowData;
 	}
 
-
 	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
 	{
 		// Aux variables
@@ -87,45 +84,40 @@ namespace HOMS
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
-		for (int j = 0; j <= smoothingOrder; j++)
+		if (intervalLength >= smoothingOrder)
 		{
-			if (intervalLength < smoothingOrder)
+			for (int j = 0; j <= smoothingOrder; j++)
 			{
-				// nothing to do: system matrix either remains upper triangular as it that small or
-				// the matrix coefficient must not be eliminated as it is the upper right quadrant
-				break;
-			}
+				double pivotRowData;
+				if (j != smoothingOrder)
+				{
+					pivotRowData = data(j);
+				}
+				else
+				{
+					pivotRowData = newDataPoint;
+				}
 
-			double pivotRowData;
-			if (j != smoothingOrder)
-			{
-				pivotRowData = data(j);
-			}
-			else
-			{
-				pivotRowData = newDataPoint;
-			}
+				auto eliminatedRowData = finiteDifferenceRowData;
 
-			auto eliminatedRowData = finiteDifferenceRowData;
+				// Apply the Givens transform to the data
+				const auto c = givensCoeffs.C(intervalLength, j);
+				const auto s = givensCoeffs.S(intervalLength, j);
 
-			// Apply the Givens transform to the data
-			const auto c = givensCoeffs.C(intervalLength, j);
-			const auto s = givensCoeffs.S(intervalLength, j);
+				if (j != smoothingOrder)
+				{
+					data(j) = c * pivotRowData + s * eliminatedRowData;
+				}
+				else
+				{
+					newDataPoint = c * pivotRowData + s * eliminatedRowData;
+				}
 
-			if (j != smoothingOrder)
-			{
-				data(j) = c * pivotRowData + s * eliminatedRowData;
+				finiteDifferenceRowData = -s * pivotRowData + c * eliminatedRowData;
 			}
-			else
-			{
-				newDataPoint = c * pivotRowData + s * eliminatedRowData;
-			}
-
-			finiteDifferenceRowData = -s * pivotRowData + c * eliminatedRowData;
+			// Update the approximation error
+			approxError += std::pow(finiteDifferenceRowData, 2);
 		}
-		// Update the approximation error
-		approxError += (intervalLength >= smoothingOrder) ? std::pow(finiteDifferenceRowData, 2) : 0;
-
 
 		// Update the interval length
 		rightBound++;

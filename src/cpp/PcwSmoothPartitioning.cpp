@@ -1,6 +1,6 @@
 #include "PcwSmoothPartitioning.h"
 
-namespace HOMS
+namespace homs
 {
 	int PcwSmoothPartitioning::minSegmentSize() const
 	{
@@ -12,16 +12,14 @@ namespace HOMS
 		m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
 		m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
 
-
-		auto systemMatrix = createSystemMatrix();
-
 		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
 		// Save them in C and S
+		auto systemMatrix = createSystemMatrix();
 		const auto numRows = static_cast<int>(systemMatrix.rows());
 		const auto numCols = static_cast<int>(systemMatrix.cols());
-		// aux variable for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
-		const auto rowOffset = m_dataLength - m_smoothingOrder;
 
+		// compensating value for systemMatrix being stored sparsely (see member fct createSystemMatrix)
+		const auto rowOffset = m_dataLength - m_smoothingOrder;
 		for (int row = m_dataLength; row < numRows; row++)
 		{
 
@@ -32,7 +30,7 @@ namespace HOMS
 				const auto upperRowLength = m_smoothingOrder - col + 1;
 				const auto lowerRowBeginCol = col;
 
-				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(v,0)
+				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(row,row)
 				auto rho = std::pow(systemMatrix(col + colOffset, 0), 2) + std::pow(systemMatrix(row, col), 2);
 				rho = std::sqrt(rho);
 				if (systemMatrix(col + colOffset, 0) < 0)
@@ -47,7 +45,6 @@ namespace HOMS
 			}
 		}
 	}
-
 
 	namespace
 	{
@@ -146,6 +143,7 @@ namespace HOMS
 		const auto rightBound = segment->rightBound;
 		const auto& currData = segment->data;
 		const auto segmentSize = segment->size();
+
 		// Fill segment via back substitution
 		resultToBeFilled(rightBound) = currData(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
 		for (int ii = segmentSize - 2; ii >= 0; ii--)
@@ -164,7 +162,7 @@ namespace HOMS
 		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingPcwSmoothSignal(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
 	{
 
 		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));
