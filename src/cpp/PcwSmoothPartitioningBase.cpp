@@ -40,8 +40,8 @@ namespace HOMS
 			intervalFromStart->addNewDataPoint(m_givensCoeffs, data(idx));
 			approximationErrorsFromStart[idx] = intervalFromStart->approxError;
 		}
+		
 		return approximationErrorsFromStart;
-
 	}
 
 	/// @brief Aux functions for fct findBestPartition
