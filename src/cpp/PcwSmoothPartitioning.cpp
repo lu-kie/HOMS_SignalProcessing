@@ -162,7 +162,7 @@ namespace homs
 		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty, m_numChannels));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& fullData) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const
 	{
 
 		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));

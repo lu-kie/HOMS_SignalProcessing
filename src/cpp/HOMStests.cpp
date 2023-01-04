@@ -364,7 +364,9 @@ namespace homs
 			int polynomialOrder = 3;
 			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, numChannels);
 			pcwImpl.initialize();
-			const auto quadraticApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			const auto quadraticApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(dataMap);
+
 			for (const auto& err : quadraticApproximationErrors)
 			{
 				EXPECT_NEAR(err, 0, 1e-12);
@@ -376,7 +378,8 @@ namespace homs
 			const int polynomialOrder = 2;
 			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, numChannels);
 			pcwImpl.initialize();
-			const auto linearApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			const auto linearApproximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(dataMap);
 
 			// aux function for verifying the results
 			auto computeExpectedLinearApproxErr = [&data](int idx, double optimalSlope, double optimalOffset)
@@ -438,13 +441,13 @@ namespace homs
 				};
 				auto dummyPcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, numChannels);
 				dummyPcwImpl.initialize();
-				const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+				const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(dataMap)[dataLength - 1];
 				for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,noJumpEnergy + 1, 2 * noJumpEnergy })
 				{
 					auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 					pcwImpl.initialize();
-					auto t = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
-					const auto foundPartition = pcwImpl.findOptimalPartition(data);
+					const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 					if (jumpPenalty < noJumpEnergy)
 					{
 						// two segments are optimal
@@ -474,7 +477,8 @@ namespace homs
 				double jumpPenalty = 0;
 				auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 				pcwImpl.initialize();
-				auto foundPartition = pcwImpl.findOptimalPartition(data);
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+				auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 
 				EXPECT_EQ(foundPartition.size(), dataLength);
 				for (int i = 0; i < dataLength; i++)
@@ -486,12 +490,13 @@ namespace homs
 				// only one segment for constant data
 				const int dataLength = 1000;
 				const int numChannels = 3;
-				Eigen::MatrixXd constantData = 80 * Eigen::MatrixXd::Ones(numChannels, dataLength);
+				Eigen::MatrixXd data = 80 * Eigen::MatrixXd::Ones(numChannels, dataLength);
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
 				for (const double& jumpPenalty : { 0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0 })
 				{
 					auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 					pcwImpl.initialize();
-					const auto foundPartition = pcwImpl.findOptimalPartition(constantData);
+					const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 					EXPECT_EQ(foundPartition.size(), 1);
 					EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
 				}
@@ -499,10 +504,10 @@ namespace homs
 		}
 		{
 			// piecewise quadratic
-			const int dataLength = 10;
-			const int numChannels = 4;
-			const int polynomialOrder = 3;
 			{
+				const int dataLength = 10;
+				const int numChannels = 4;
+				const int polynomialOrder = 3;
 				Eigen::MatrixXd data
 				{
 					{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
@@ -512,13 +517,13 @@ namespace homs
 				};
 				auto dummyPcwImpl = PcwPolynomialPartitioning(polynomialOrder, 1, dataLength, numChannels);
 				dummyPcwImpl.initialize();
-
-				const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+				const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(dataMap)[dataLength - 1];
 				for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 				{
 					auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 					pcwImpl.initialize();
-					const auto foundPartition = pcwImpl.findOptimalPartition(data);
+					const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 
 					if (jumpPenalty < noJumpEnergy)
 					{
@@ -537,12 +542,16 @@ namespace homs
 			}
 
 			{
+				const int dataLength = 10;
+				const int numChannels = 1;
+				const int polynomialOrder = 3;
 				// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
 				Eigen::MatrixXd data{ {1, -1, 1, -1, 1, -1, 1, -1, 1, -1} };
 				const double jumpPenalty = 1e-8;
-				auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, 1);
+				auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 				pcwImpl.initialize();
-				const auto foundPartition = pcwImpl.findOptimalPartition(data);
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+				const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 
 				EXPECT_EQ(foundPartition.size(), 4);
 
@@ -557,15 +566,17 @@ namespace homs
 			}
 			{
 				// only one segment for quadratic data
+				const int polynomialOrder = 3;
 				const int dataLength = 1000;
 				const int numChannels = 1;
-				Eigen::MatrixXd quadraticData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
-				quadraticData.transposeInPlace();
+				Eigen::MatrixXd data = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
+				data.transposeInPlace();
+				const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
 				for (const double& jumpPenalty : { 0.001,0.01,0.1, 1.0,10.0,100.0,1000.0 })
 				{
 					auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
 					pcwImpl.initialize();
-					const auto foundPartition = pcwImpl.findOptimalPartition(quadraticData);
+					const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 					EXPECT_EQ(foundPartition.segments.size(), 1);
 					EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 999));
 				}
@@ -750,7 +761,8 @@ namespace homs
 		};
 
 		// discrete third order smoothing spline for parabolic data -> expect only zero optimal energies
-		const auto approximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
+		const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+		const auto approximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(dataMap);
 		for (const auto& err : approximationErrors)
 		{
 			EXPECT_NEAR(err, 0, 1e-12);
@@ -773,15 +785,16 @@ namespace homs
 				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
 				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36}
 			};
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
 			auto dummyPcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, numChannels);
 			dummyPcwImpl.initialize();
-			const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+			const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(dataMap)[dataLength - 1];
 
 			for (const double& jumpPenalty : { 1.0, 10.0, 50.0,noJumpEnergy - 0.5, noJumpEnergy + 0.5, 2 * noJumpEnergy })
 			{
 				auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
 				pcwImpl.initialize();
-				const auto foundPartition = pcwImpl.findOptimalPartition(data);
+				const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 
 				if (jumpPenalty < noJumpEnergy)
 				{
@@ -815,7 +828,8 @@ namespace homs
 			double jumpPenalty = 1e-8;
 			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
 			pcwImpl.initialize();
-			const auto foundPartition = pcwImpl.findOptimalPartition(data);
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
 
 			EXPECT_EQ(foundPartition.size(), 4);
 
@@ -827,23 +841,25 @@ namespace homs
 				sumSegmentLengths += segmentLength;
 			}
 			EXPECT_EQ(sumSegmentLengths, dataLength);
-			{
-				// only one segment for quadratic data
-				const int dataLength = 500;
-				const int numChannels = 1;
-				Eigen::MatrixXd quadraticData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
-				quadraticData.transposeInPlace();
+		}
+		{
+			// only one segment for quadratic data
+			const int dataLength = 500;
+			const int numChannels = 1;
+			const int smoothingOrder = 3;
+			Eigen::MatrixXd data = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
+			data.transposeInPlace();
 
-				for (const double& jumpPenalty : { 0.1,1.0,10.0,100.0,1000.0 })
+			for (const double& jumpPenalty : { 0.1,1.0,10.0,100.0,1000.0 })
+			{
+				for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
 				{
-					for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
-					{
-						pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
-						pcwImpl.initialize();
-						const auto foundPartition = pcwImpl.findOptimalPartition(quadraticData);
-						EXPECT_EQ(foundPartition.size(), 1);
-						EXPECT_EQ(foundPartition.segments.at(0), Segment(0, dataLength - 1));
-					}
+					auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
+					pcwImpl.initialize();
+					const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+					const auto foundPartition = pcwImpl.findOptimalPartition(dataMap);
+					EXPECT_EQ(foundPartition.size(), 1);
+					EXPECT_EQ(foundPartition.segments.at(0), Segment(0, dataLength - 1));
 				}
 			}
 		}
@@ -866,7 +882,7 @@ namespace homs
 		};
 
 		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
-		auto [result, partition] = pcwImpl.applyToData(data);
+		auto [result, partition] = pcwImpl.applyToData(data.data());
 
 		Partitioning expectedPartition;
 		expectedPartition.segments.push_back(Segment(0, 5));

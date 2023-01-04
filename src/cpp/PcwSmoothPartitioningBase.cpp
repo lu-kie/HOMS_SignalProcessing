@@ -5,6 +5,17 @@ namespace homs
 {
 	std::pair<Eigen::MatrixXd, Partitioning> PcwSmoothPartitioningBase::applyToData(Eigen::MatrixXd& data)
 	{
+		return applyToData(data.data());
+	}
+
+	std::pair<Eigen::MatrixXd, Partitioning> PcwSmoothPartitioningBase::applyToData(double* data)
+	{
+		const Eigen::Map<Eigen::MatrixXd> dataMap(data, m_numChannels, m_dataLength);
+		return applyToData(dataMap);
+	}
+
+	std::pair<Eigen::MatrixXd, Partitioning> PcwSmoothPartitioningBase::applyToData(const Eigen::Map<Eigen::MatrixXd>& data)
+	{
 		if (static_cast<int>(data.cols()) != m_dataLength)
 		{
 			throw std::invalid_argument("Input data length must fit implementation's data length");
@@ -33,7 +44,7 @@ namespace homs
 		m_initialized = true;
 	}
 
-	std::vector<double> PcwSmoothPartitioningBase::computeOptimalEnergiesNoSegmentation(const Eigen::MatrixXd& data) const
+	std::vector<double> PcwSmoothPartitioningBase::computeOptimalEnergiesNoSegmentation(const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
 		std::vector<double> approximationErrorsFromStart(m_dataLength, 0);
 		approximationErrorsFromStart.resize(m_dataLength);
@@ -52,7 +63,7 @@ namespace homs
 	namespace
 	{
 		bool updateIntervalToRightBoundOrEraseIt(ApproxIntervalBase& interval, const std::vector<double>& optimalEnergies,
-			const Eigen::MatrixXd& data, const int rightBound, const GivensCoefficients& givensCoeffs)
+			const Eigen::Map<Eigen::MatrixXd>& data, const int rightBound, const GivensCoefficients& givensCoeffs)
 		{
 			while (interval.rightBound < rightBound)
 			{
@@ -84,7 +95,7 @@ namespace homs
 		}
 	}
 
-	Partitioning PcwSmoothPartitioningBase::findOptimalPartition(Eigen::MatrixXd& data) const
+	Partitioning PcwSmoothPartitioningBase::findOptimalPartition(const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
 		const auto approximationErrorsFromStart = computeOptimalEnergiesNoSegmentation(data);
 
@@ -137,7 +148,8 @@ namespace homs
 		return Partitioning(jumpsTracker);
 	}
 
-	std::vector<std::unique_ptr<ApproxIntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::MatrixXd& data, Eigen::MatrixXd& resultToBeFilled) const
+	std::vector<std::unique_ptr<ApproxIntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionAndFillShortSegments(
+		const Partitioning& partition, const int minSegmentSize, const Eigen::Map<Eigen::MatrixXd>& data, Eigen::MatrixXd& resultToBeFilled) const
 	{
 		std::vector<std::unique_ptr<ApproxIntervalBase>> Intervals;
 		Intervals.reserve(partition.size());
@@ -166,7 +178,7 @@ namespace homs
 		return Intervals;
 	}
 
-	Eigen::MatrixXd PcwSmoothPartitioningBase::computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, Eigen::MatrixXd& data) const
+	Eigen::MatrixXd PcwSmoothPartitioningBase::computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
 		Eigen::MatrixXd pcwSmoothResult = Eigen::MatrixXd::Zero(m_numChannels, m_dataLength);
 

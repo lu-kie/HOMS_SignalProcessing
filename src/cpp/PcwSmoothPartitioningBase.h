@@ -33,7 +33,18 @@ namespace homs
 		/// @brief Apply the partitioning and the corresponding piecewise smoothing to data
 		/// @param data 
 		/// @return optimal partitioning and corresponding pcw. smoothed signal
+		std::pair<Eigen::MatrixXd, Partitioning> applyToData(const Eigen::Map<Eigen::MatrixXd>& data);
+
+		/// @brief Apply the partitioning and the corresponding piecewise smoothing to data
+		/// @param data 
+		/// @return optimal partitioning and corresponding pcw. smoothed signal
 		std::pair<Eigen::MatrixXd, Partitioning> applyToData(Eigen::MatrixXd& data);
+
+		/// @brief Apply the partitioning and the corresponding piecewise smoothing to data 
+		/// given by a raw data pointer
+		/// @param data data given as raw pointer
+		/// @return optimal partitioning and corresponding pcw. smoothed signal
+		std::pair<Eigen::MatrixXd, Partitioning> applyToData(double* data);
 
 	protected:
 		/// @brief Get the smallest size of a normal partitioning's segment
@@ -58,7 +69,7 @@ namespace homs
 		/// @param rightBound right bound of the interval 
 		/// @param data full data
 		/// @return interval object
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& data) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& data) const = 0;
 
 		/// @brief Compute the best approximating smooth signal for the segment by performing back substition on the partial (full length) upper triangular system matrix
 		/// @param segment 
@@ -75,12 +86,12 @@ namespace homs
 		/// @brief Compute the best approximation errors for data(0..r), r=1..dataLength
 		/// @param data 
 		/// @return best approximation errors
-		std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::MatrixXd& data) const;
+		std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::Map<Eigen::MatrixXd>& data) const;
 
 		/// @brief Run the dynamic programming scheme to find an optimal partition of the input data
 		/// @param data 
 		/// @return optimal partition into (discrete) intervals
-		Partitioning findOptimalPartition(Eigen::MatrixXd& data) const;
+		Partitioning findOptimalPartition(const Eigen::Map<Eigen::MatrixXd>& data) const;
 
 	protected:
 		int m_dataLength{ 0 }; ///< number of data points of incoming data
@@ -95,13 +106,13 @@ namespace homs
 		/// @param data 
 		/// @param resultToBeFilled 
 		/// @return vector of intervals
-		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::MatrixXd& data, Eigen::MatrixXd& resultToBeFilled) const;
+		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::Map<Eigen::MatrixXd>& data, Eigen::MatrixXd& resultToBeFilled) const;
 
 		/// @brief Compute the best fitting piecewise smooth/polynomial result from the found optimal partition
 		/// @param partition 
 		/// @param data 
 		/// @return piecewise smooth result
-		Eigen::MatrixXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, Eigen::MatrixXd& data) const;
+		Eigen::MatrixXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, const Eigen::Map<Eigen::MatrixXd>& data) const;
 
 		bool m_initialized{ false }; ///< flag if object is initialized, i.e. if the Givens coefficients have been computed
 		double m_jumpPenalty{ std::numeric_limits<double>::infinity() }; ///< how much does introducing a new segment cost: large values give few segments and vice versa

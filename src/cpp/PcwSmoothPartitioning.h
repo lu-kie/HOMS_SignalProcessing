@@ -32,7 +32,7 @@ namespace homs
 		void eliminateSystemMatrixEntry(Eigen::MatrixXd& systemMatrix, int row, int col) const;
 		void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const;
 		std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const;
-		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& fullData) const;
+		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const;
 
 		int m_smoothingOrder{ 1 }; ///< order of the piecewise (discrete) smooth partitioning and smoothing (1: first differences, 2: second order differences etc.)
 		double m_smoothnessPenalty{ 1 }; ///< how much the smoothness is penalized, i.e. enforced (larger values enforce more smoothing, limit case is piecewise polynomial smoothing)

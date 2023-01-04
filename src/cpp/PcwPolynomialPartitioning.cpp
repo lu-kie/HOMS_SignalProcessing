@@ -104,8 +104,8 @@ namespace homs
 		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, newDataPoint, m_polynomialOrder, m_numChannels));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& data) const
+	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const
 	{
-		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, rightBound, data, m_polynomialOrder));
+		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, rightBound, fullData, m_polynomialOrder));
 	}
 }
