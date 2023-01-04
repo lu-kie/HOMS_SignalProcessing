@@ -28,17 +28,21 @@ namespace homs
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
-		for (int j = 0; j < std::min(polynomialOrder, intervalLength); j++)
+		for (int col = 0; col < std::min(polynomialOrder, intervalLength); col++)
 		{
 			// Apply the Givens transform to the data
-			const auto c = givensCoeffs.C(intervalLength, j);
-			const auto s = givensCoeffs.S(intervalLength, j);
+			const auto c = givensCoeffs.C(intervalLength, col);
+			const auto s = givensCoeffs.S(intervalLength, col);
 
-			const Eigen::VectorXd pivotRowData = data.col(j);
+			const Eigen::VectorXd pivotRowData = data.col(col);
 			const Eigen::VectorXd eliminatedRowData = newDataPoint;
-			data.col(j) = c * pivotRowData + s * eliminatedRowData;
+			data.col(col) = c * pivotRowData + s * eliminatedRowData;
 			newDataPoint = -s * pivotRowData + c * eliminatedRowData;
 		}
+
+
+		// Update the interval boundaries
+		rightBound++;
 
 		const auto newIntervalLength = intervalLength + 1;
 
@@ -47,9 +51,6 @@ namespace homs
 		{
 			approxError += newDataPoint.squaredNorm();
 		}
-
-		// Update the interval boundaries
-		rightBound++;
 
 		// Update the stored interval data if necessary
 		if (newIntervalLength <= polynomialOrder)
@@ -78,55 +79,40 @@ namespace homs
 
 	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
 	{
-		// Aux variables
-		Eigen::VectorXd finiteDifferenceRowData = Eigen::VectorXd::Zero(newDataPoint.rows());
 		const auto intervalLength = size();
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
 		if (intervalLength >= smoothingOrder)
 		{
-			for (int j = 0; j <= smoothingOrder; j++)
+			Eigen::VectorXd eliminatedRowData = Eigen::VectorXd::Zero(newDataPoint.rows());
+			for (int j = 0; j < smoothingOrder; j++)
 			{
-				Eigen::VectorXd pivotRowData;
-				if (j != smoothingOrder)
-				{
-					pivotRowData = data.col(j);
-				}
-				else
-				{
-					pivotRowData = newDataPoint;
-				}
-
-				auto eliminatedRowData = finiteDifferenceRowData;
-
+				const Eigen::VectorXd pivotRowData = data.col(j);
 				// Apply the Givens transform to the data
 				const auto c = givensCoeffs.C(intervalLength, j);
 				const auto s = givensCoeffs.S(intervalLength, j);
 
-				if (j != smoothingOrder)
-				{
-					data.col(j) = c * pivotRowData + s * eliminatedRowData;
-				}
-				else
-				{
-					newDataPoint = c * pivotRowData + s * eliminatedRowData;
-				}
-
-				finiteDifferenceRowData = -s * pivotRowData + c * eliminatedRowData;
+				data.col(j) = c * pivotRowData + s * eliminatedRowData;
+				eliminatedRowData = -s * pivotRowData + c * eliminatedRowData;
 			}
+
+			const auto c = givensCoeffs.C(intervalLength, smoothingOrder);
+			const auto s = givensCoeffs.S(intervalLength, smoothingOrder);
+			
+			const Eigen::VectorXd pivotRowData = newDataPoint;
+			newDataPoint = c * pivotRowData + s * eliminatedRowData;
+			eliminatedRowData = -s * pivotRowData + c * eliminatedRowData;
+
 			// Update the approximation error
-			approxError += finiteDifferenceRowData.squaredNorm();
+			approxError += eliminatedRowData.squaredNorm();
 		}
 
 		// Update the interval length
 		rightBound++;
 
 		// Update the stored interval data if necessary
-		if (smoothingOrder > 1)
-		{
-			data.leftCols(smoothingOrder - 1) = data.middleCols(1, smoothingOrder - 1);
-		}
+		data.leftCols(smoothingOrder - 1) = data.middleCols(1, smoothingOrder - 1);
 		data.col(smoothingOrder - 1) = newDataPoint;
 	}
 

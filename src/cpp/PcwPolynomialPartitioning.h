@@ -42,5 +42,6 @@ namespace homs
 		FRIEND_TEST(PcwPolynomialPartitioning, computeGivensCoefficients);
 		FRIEND_TEST(PcwPolynomialPartitioning, computeOptimalEnergiesNoSegmentation);
 		FRIEND_TEST(PcwPolynomialPartitioning, findOptimalPartition);
+		FRIEND_TEST(PcwPolynomialPartitioning, computeSignalFromPartitioning);
 	};
 }

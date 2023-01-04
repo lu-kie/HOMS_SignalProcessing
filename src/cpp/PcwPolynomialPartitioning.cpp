@@ -31,24 +31,23 @@ namespace homs
 				m_givensCoeffs.C(row, col) = systemMatrix(col, col) / rho;
 				m_givensCoeffs.S(row, col) = systemMatrix(row, col) / rho;
 				// update the system matrix accordingly, i.e. apply the Givens rotation to the corresponding matrix rows
-				Eigen::MatrixXd upperMatRow = systemMatrix.row(col);
-				Eigen::MatrixXd lowerMatRow = systemMatrix.row(row);
-				systemMatrix.row(col) = m_givensCoeffs.C(row, col) * upperMatRow + m_givensCoeffs.S(row, col) * lowerMatRow;
-				systemMatrix.row(row) = -m_givensCoeffs.S(row, col) * upperMatRow + m_givensCoeffs.C(row, col) * lowerMatRow;
+				eliminateSystemMatrixEntry(systemMatrix, row, col);
 			}
 		}
 	}
 
 	Eigen::MatrixXd PcwPolynomialPartitioning::createSystemMatrix() const
 	{
-		/* Example for m_smoothingOrder = 3
+		/* Example for m_polynomialOrder = 3
 			systemMatrix = [ 1    1  1
 							 4    2  1
 							 9    3  1
 							 ...
 							 n^2  n  1 ]
 		*/
+
 		Eigen::MatrixXd systemMatrix = Eigen::MatrixXd::Ones(m_dataLength, m_polynomialOrder);
+
 		for (int j = m_polynomialOrder - 2; j >= 0; j--)
 		{
 			systemMatrix.col(j) = Eigen::VectorXd::LinSpaced(m_dataLength, 1, m_dataLength).cwiseProduct(systemMatrix.col(j + 1));
@@ -67,8 +66,8 @@ namespace homs
 		const auto c = m_givensCoeffs.C(row, col);
 		const auto s = m_givensCoeffs.S(row, col);
 
-		const Eigen::VectorXd upperMatRow = systemMatrix.row(col);
-		const Eigen::VectorXd lowerMatRow = systemMatrix.row(row);
+		const Eigen::RowVectorXd upperMatRow = systemMatrix.row(col);
+		const Eigen::RowVectorXd lowerMatRow = systemMatrix.row(row);
 
 		systemMatrix.row(col) = c * upperMatRow + s * lowerMatRow;
 		systemMatrix.row(row) = -s * upperMatRow + c * lowerMatRow;

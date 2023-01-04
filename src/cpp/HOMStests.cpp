@@ -77,7 +77,7 @@ namespace homs
 			const auto smoothnessPenalty = 3;
 			const int fullDataLength = 6;
 
-			auto thirdOrderSplineInterval = ApproxIntervalSmooth(leftBound, dataPoint, smoothingOrder, smoothnessPenalty, numChannels);
+			auto thirdOrderSplineInterval = ApproxIntervalSmooth(leftBound, dataPoint, smoothingOrder, numChannels);
 
 			EXPECT_EQ(thirdOrderSplineInterval.size(), 1);
 
@@ -223,7 +223,7 @@ namespace homs
 		const int leftBound = 0;
 		const int rightBound = 6;
 
-		auto thirdOrderDiscreteSplineInterval = ApproxIntervalSmooth(leftBound, rightBound, intervalData, smoothingOrder, smoothnessPenalty);
+		auto thirdOrderDiscreteSplineInterval = ApproxIntervalSmooth(leftBound, rightBound, intervalData, smoothingOrder);
 
 		Eigen::MatrixXd fullSystemMatrix(2 * dataLength - smoothingOrder, dataLength);
 		fullSystemMatrix <<
@@ -306,7 +306,8 @@ namespace homs
 		const int dataLength = 4;
 		const int numChannels = 5;
 		const int polynomialOrder = 3;
-		Eigen::MatrixXd systemMatrix{
+		Eigen::MatrixXd systemMatrix
+		{
 			{1,  1, 1},
 			{4,  2, 1},
 			{9,  3, 1},
@@ -558,9 +559,7 @@ namespace homs
 				int sumSegmentLengths = 0;
 				for (const auto& segment : foundPartition.segments)
 				{
-					const auto segmentLength = segment.size();
-					EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
-					sumSegmentLengths += segmentLength;
+					sumSegmentLengths += segment.size();
 				}
 				EXPECT_EQ(sumSegmentLengths, dataLength);
 			}
@@ -584,25 +583,97 @@ namespace homs
 		}
 	}
 
+	TEST(PcwPolynomialPartitioning, computeSignalFromPartitioning)
+	{
+		{
+			// piecewise quadratic, perfect fit
+			const int dataLength = 19;
+			const int numChannels = 5;
+			Eigen::MatrixXd data
+			{
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 100, 110, 900},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 100, 110, 900},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 100, 110, 900},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 100, 110, 900},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 100, 110, 900}
+			};
+
+			Partitioning partition;
+			partition.segments.push_back(Segment(0, 5));
+			partition.segments.push_back(Segment(6, 12));
+			partition.segments.push_back(Segment(13, 15));
+			partition.segments.push_back(Segment(16, 17));
+			partition.segments.push_back(Segment(18, 18));
+
+			const int polynomialOrder = 3;
+			const double jumpPenalty = 0.1;
+			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
+			pcwImpl.initialize();
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			auto pcwPolynomialResult = pcwImpl.computePcwSmoothedSignalFromPartitioning(partition, dataMap);
+
+			EXPECT_EQ(dataLength, static_cast<int>(pcwPolynomialResult.cols()));
+			EXPECT_EQ(numChannels, static_cast<int>(pcwPolynomialResult.rows()));
+			EXPECT_TRUE(data.isApprox(pcwPolynomialResult, 1e-8));
+		}
+
+		{
+			// piecewise linear, first segment f(x) = 5x-13.33, second segment perfect fit
+			const int dataLength = 18;
+			const int numChannels = 3;
+			const int polynomialOrder = 2;
+			const double jumpPenalty = 150;
+
+			Eigen::MatrixXd data
+			{
+				{0, 1, 4, 9, 16, 25, 100, 90, 80, 70, 60, 50, 40, 30, 20, 50, 100, 1},
+				{0, 1, 4, 9, 16, 25, 100, 90, 80, 70, 60, 50, 40, 30, 20, 5, 1000, 1},
+				{0, 1, 4, 9, 16, 25, 100, 90, 80, 70, 60, 50, 40, 30, 20, 50, 100, 10}
+			};
+
+			Partitioning partition;
+			partition.segments.push_back(Segment(0, 5));
+			partition.segments.push_back(Segment(6, 14));
+			partition.segments.push_back(Segment(15, 15));
+			partition.segments.push_back(Segment(16, 17));
+
+			auto pcwImpl = PcwPolynomialPartitioning(polynomialOrder, jumpPenalty, dataLength, numChannels);
+			pcwImpl.initialize();
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			auto pcwPolynomialResult = pcwImpl.computePcwSmoothedSignalFromPartitioning(partition, dataMap);
+
+			Eigen::MatrixXd expectedResult
+			{
+				{ -3.33, 1.67, 6.67, 11.67, 16.67, 21.67, 100, 90, 80, 70, 60, 50, 40, 30, 20, 50, 100, 1 },
+				{ -3.33, 1.67, 6.67, 11.67, 16.67, 21.67, 100, 90, 80, 70, 60, 50, 40, 30, 20, 5, 1000, 1 },
+				{ -3.33, 1.67, 6.67, 11.67, 16.67, 21.67, 100, 90, 80, 70, 60, 50, 40, 30, 20, 50, 100, 10}
+			};
+
+			EXPECT_EQ(dataLength, static_cast<int>(pcwPolynomialResult.cols()));
+			EXPECT_EQ(numChannels, static_cast<int>(pcwPolynomialResult.rows()));
+			EXPECT_TRUE(expectedResult.isApprox(pcwPolynomialResult, 1e-4));
+		}
+	}
+
 	TEST(PcwPolynomialPartitioning, pcwPolynomialResult)
 	{
 		{
 			// piecewise quadratic, perfect fit
-			const int dataLength = 15;
+			const int dataLength = 16;
 			const int numChannels = 5;
 			Eigen::MatrixXd data
 			{
-				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50},
-				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50},
-				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50},
-				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50},
-				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50}
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10},
+				{0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10}
 			};
 
 			Partitioning expectedPartition;
 			expectedPartition.segments.push_back(Segment(0, 5));
 			expectedPartition.segments.push_back(Segment(6, 12));
-			expectedPartition.segments.push_back(Segment(13, 14));
+			expectedPartition.segments.push_back(Segment(13, 15));
 
 			const int polynomialOrder = 3;
 			const double jumpPenalty = 0.1;
@@ -836,9 +907,7 @@ namespace homs
 			int sumSegmentLengths = 0;
 			for (const auto& segment : foundPartition.segments)
 			{
-				const auto segmentLength = segment.size();
-				EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
-				sumSegmentLengths += segmentLength;
+				sumSegmentLengths += segment.size();
 			}
 			EXPECT_EQ(sumSegmentLengths, dataLength);
 		}
@@ -865,38 +934,148 @@ namespace homs
 		}
 	}
 
+	TEST(PcwSmoothPartitioning, computeSignalFromPartitioning)
+	{
+		{
+			// piecewise quadratic, perfect fit for third order smoothness
+			const int dataLength = 22;
+			const int numChannels = 5;
+			const int smoothingOrder = 3;
+			const auto smoothnessPenalty = 1;
+			Eigen::MatrixXd data
+			{
+				{ 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 1, 2, 3, 4, 5, 6},
+				{ -2, -8, -18, -32, -50, -72, 0, 1, 4, 9, 16, 25, 36, 50, 100, 10, 1, 2, 3, 4, 5, 6 },
+				{ 0, 2, 8, 18, 32, 50, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10, 1, 2, 3, 4, 5, 6 },
+				{ 0, 1, 4, 9, 16, 25, -4, -16, -36, -64, -100, -144, -196, 50, 100, 10, 1, 2, 3, 4, 5, 6 },
+				{ 0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 1, 2, 3, 4, 5, 6 }
+			};
+
+			Partitioning partition;
+			partition.segments.push_back(Segment(0, 5));
+			partition.segments.push_back(Segment(6, 12));
+			partition.segments.push_back(Segment(13, 15));
+			partition.segments.push_back(Segment(16, 18));
+			partition.segments.push_back(Segment(19, 20));
+			partition.segments.push_back(Segment(21, 21));
+
+			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
+			pcwImpl.initialize();
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			auto result = pcwImpl.computePcwSmoothedSignalFromPartitioning(partition, dataMap);
+
+			Eigen::MatrixXd expectedResult = data;
+
+			EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
+			EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
+			EXPECT_TRUE(data.isApprox(result, 1e-8));
+		}
+
+		{
+			// piecewise constant, perfect fit for first order smoothness
+			const int dataLength = 17;
+			const int numChannels = 5;
+			const int smoothingOrder = 1;
+			const double smoothnessPenalty = 1;
+			Eigen::MatrixXd data
+			{
+				{ 2,2,2,2,2,2,6,6,6,6,6,6,6,10,10,25,30 },
+				{ 3,3,3,3,3,3,7,7,7,7,7,7,7,11,11,25,30 },
+				{ 4,4,4,4,4,4,8,8,8,8,8,8,8,12,12,25,30 },
+				{ 5,5,5,5,5,5,8,8,8,8,8,8,8,13,13,25,30 },
+				{ 6,6,6,6,6,6,8,8,8,8,8,8,8,14,14,25,30 },
+			};
+			Partitioning partition;
+			partition.segments.push_back(Segment(0, 5));
+			partition.segments.push_back(Segment(6, 12));
+			partition.segments.push_back(Segment(13, 14));
+			partition.segments.push_back(Segment(15, 15));
+			partition.segments.push_back(Segment(16, 16));
+
+			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
+			pcwImpl.initialize();
+			const auto dataMap = Eigen::Map<Eigen::MatrixXd>(data.data(), numChannels, dataLength);
+			auto result = pcwImpl.computePcwSmoothedSignalFromPartitioning(partition, dataMap);
+
+			Eigen::MatrixXd expectedResult = data;
+
+			EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
+			EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
+			EXPECT_TRUE(data.isApprox(result, 1e-8));
+		}
+	}
+
 	TEST(PcwSmoothPartitioning, pcwSmoothResult)
 	{
-		// piecewise quadratic, perfect fit for third order smoothness
-		const int dataLength = 15;
-		const int numChannels = 5;
-		const int smoothingOrder = 3;
-		const auto smoothnessPenalty = 1;
-		Eigen::MatrixXd data
 		{
-			{ 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50 },
-			{ -2, -8, -18, -32, -50, -72, 0, 1, 4, 9, 16, 25, 36, 50, 100 },
-			{ 0, 2, 8, 18, 32, 50, -2, -8, -18, -32, -50, -72, -98, 100, 50 },
-			{ 0, 1, 4, 9, 16, 25, -4, -16, -36, -64, -100, -144, -196, 50, 100 },
-			{ 0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196 }
-		};
+			// piecewise quadratic, perfect fit for third order smoothness
+			const int dataLength = 16;
+			const int numChannels = 5;
+			const int smoothingOrder = 3;
+			const auto smoothnessPenalty = 1;
+			Eigen::MatrixXd data
+			{
+				{ 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10 },
+				{ -2, -8, -18, -32, -50, -72, 0, 1, 4, 9, 16, 25, 36, 50, 100, 10 },
+				{ 0, 2, 8, 18, 32, 50, -2, -8, -18, -32, -50, -72, -98, 100, 50, 10 },
+				{ 0, 1, 4, 9, 16, 25, -4, -16, -36, -64, -100, -144, -196, 50, 100, 10 },
+				{ 0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225 }
+			};
 
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
-		auto [result, partition] = pcwImpl.applyToData(data.data());
+			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
+			auto [result, partition] = pcwImpl.applyToData(data.data());
 
-		Partitioning expectedPartition;
-		expectedPartition.segments.push_back(Segment(0, 5));
-		expectedPartition.segments.push_back(Segment(6, 12));
-		expectedPartition.segments.push_back(Segment(13, 14));
-		Eigen::MatrixXd expectedResult = data;
+			Partitioning expectedPartition;
+			expectedPartition.segments.push_back(Segment(0, 5));
+			expectedPartition.segments.push_back(Segment(6, 12));
+			expectedPartition.segments.push_back(Segment(13, 15));
+			Eigen::MatrixXd expectedResult = data;
 
-		EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
-		EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
-		EXPECT_TRUE(data.isApprox(result, 1e-8));
+			EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
+			EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
+			EXPECT_TRUE(data.isApprox(result, 1e-8));
 
-		EXPECT_EQ(partition.size(), expectedPartition.size());
-		EXPECT_EQ(partition.segments.at(0), expectedPartition.segments.at(0));
-		EXPECT_EQ(partition.segments.at(1), expectedPartition.segments.at(1));
-		EXPECT_EQ(partition.segments.at(2), expectedPartition.segments.at(2));
+			EXPECT_EQ(partition.size(), expectedPartition.size());
+			EXPECT_EQ(partition.segments.at(0), expectedPartition.segments.at(0));
+			EXPECT_EQ(partition.segments.at(1), expectedPartition.segments.at(1));
+			EXPECT_EQ(partition.segments.at(2), expectedPartition.segments.at(2));
+		}
+
+		{
+			// piecewise constant, perfect fit for first order smoothness
+			const int dataLength = 15;
+			const int numChannels = 5;
+			const int smoothingOrder = 1;
+
+			Eigen::MatrixXd data
+			{
+				{ 2,2,2,2,2,2,6,6,6,6,6,6,6,10,10 },
+				{ 3,3,3,3,3,3,7,7,7,7,7,7,7,11,11 },
+				{ 4,4,4,4,4,4,8,8,8,8,8,8,8,12,12 },
+				{ 5,5,5,5,5,5,8,8,8,8,8,8,8,13,13 },
+				{ 6,6,6,6,6,6,8,8,8,8,8,8,8,14,14 },
+			};
+
+			for (const double smoothnessPenalty : {1.0, 2.0, 3.0, 5.0, 10.0})
+			{
+				auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
+				auto [result, partition] = pcwImpl.applyToData(data.data());
+
+				Partitioning expectedPartition;
+				expectedPartition.segments.push_back(Segment(0, 5));
+				expectedPartition.segments.push_back(Segment(6, 12));
+				expectedPartition.segments.push_back(Segment(13, 14));
+				Eigen::MatrixXd expectedResult = data;
+
+				EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
+				EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
+				EXPECT_TRUE(data.isApprox(result, 1e-8));
+
+				EXPECT_EQ(partition.size(), expectedPartition.size());
+				EXPECT_EQ(partition.segments.at(0), expectedPartition.segments.at(0));
+				EXPECT_EQ(partition.segments.at(1), expectedPartition.segments.at(1));
+				EXPECT_EQ(partition.segments.at(2), expectedPartition.segments.at(2));
+			}
+		}
 	}
 }

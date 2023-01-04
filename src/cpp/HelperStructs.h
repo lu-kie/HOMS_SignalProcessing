@@ -148,11 +148,10 @@ namespace homs
 		/// @param leftBound 
 		/// @param dataPoint 
 		/// @param smoothingOrder 
-		/// @param smoothnessPenalty 
-		ApproxIntervalSmooth(const int leftBound, const Eigen::VectorXd& dataPoint, const int smoothingOrder, const double smoothnessPenalty, const int numChannels)
+		/// @param numChannels
+		ApproxIntervalSmooth(const int leftBound, const Eigen::VectorXd& dataPoint, const int smoothingOrder, const int numChannels)
 			: ApproxIntervalBase(leftBound, dataPoint, smoothingOrder, numChannels, PcwRegularizationType::pcwSmooth)
 			, smoothingOrder(smoothingOrder)
-			, smoothnessPenalty(smoothnessPenalty)
 		{}
 
 		/// @brief Constructor of a smooth interval from full data and interval boundaries
@@ -160,12 +159,10 @@ namespace homs
 		/// @param rightBound 
 		/// @param fullData 
 		/// @param smoothingOrder 
-		/// @param smoothnessPenalty 
 		/// @param numChannels
-		ApproxIntervalSmooth(const int leftBound, const int rightBound, const Eigen::MatrixXd& fullData, const int smoothingOrder, const double smoothnessPenalty)
+		ApproxIntervalSmooth(const int leftBound, const int rightBound, const Eigen::MatrixXd& fullData, const int smoothingOrder)
 			: ApproxIntervalBase(leftBound, rightBound)
 			, smoothingOrder(smoothingOrder)
-			, smoothnessPenalty(smoothnessPenalty)
 		{
 			// For the reconstruction process the data vector must be appended by zeros for piecewise smooth reconstruction
 			data = Eigen::MatrixXd::Zero(fullData.rows(), 2 * size() - smoothingOrder);
@@ -176,7 +173,6 @@ namespace homs
 		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
 
 		int smoothingOrder{ 1 }; ///< order of discrete smoothness on the interval (1: first forward differences, 2: second order differences etc.)
-		double smoothnessPenalty{ 1 }; ///< how much is the smoothness enforced
 	};
 
 }

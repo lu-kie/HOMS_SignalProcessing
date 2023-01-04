@@ -93,6 +93,12 @@ namespace homs
 		/// @return optimal partition into (discrete) intervals
 		Partitioning findOptimalPartition(const Eigen::Map<Eigen::MatrixXd>& data) const;
 
+		/// @brief Compute the best fitting piecewise smooth/polynomial result from the found optimal partition
+		/// @param partition 
+		/// @param data 
+		/// @return piecewise smooth result
+		Eigen::MatrixXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, const Eigen::Map<Eigen::MatrixXd>& data) const;
+
 	protected:
 		int m_dataLength{ 0 }; ///< number of data points of incoming data
 		int m_numChannels{ 1 }; ///< number of channels of incoming data (e.g. 3 for data taken from an RGB image)
@@ -106,13 +112,7 @@ namespace homs
 		/// @param data 
 		/// @param resultToBeFilled 
 		/// @return vector of intervals
-		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::Map<Eigen::MatrixXd>& data, Eigen::MatrixXd& resultToBeFilled) const;
-
-		/// @brief Compute the best fitting piecewise smooth/polynomial result from the found optimal partition
-		/// @param partition 
-		/// @param data 
-		/// @return piecewise smooth result
-		Eigen::MatrixXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, const Eigen::Map<Eigen::MatrixXd>& data) const;
+		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionForComputingResult(const Partitioning& partition, const int minSegmentSize, const Eigen::Map<Eigen::MatrixXd>& data, Eigen::MatrixXd& resultToBeFilled) const;
 
 		bool m_initialized{ false }; ///< flag if object is initialized, i.e. if the Givens coefficients have been computed
 		double m_jumpPenalty{ std::numeric_limits<double>::infinity() }; ///< how much does introducing a new segment cost: large values give few segments and vice versa

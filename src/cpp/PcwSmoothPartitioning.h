@@ -44,5 +44,6 @@ namespace homs
 		FRIEND_TEST(PcwSmoothPartitioning, computeGivensCoefficients);
 		FRIEND_TEST(PcwSmoothPartitioning, computeOptimalEnergiesNoSegmentation);
 		FRIEND_TEST(PcwSmoothPartitioning, findOptimalPartition);
+		FRIEND_TEST(PcwSmoothPartitioning, computeSignalFromPartitioning);
 	};
 }

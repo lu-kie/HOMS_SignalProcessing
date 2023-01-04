@@ -67,17 +67,14 @@ namespace homs
 		{
 			while (interval.rightBound < rightBound)
 			{
-				const auto currentRightBound = interval.rightBound;
+				// Extend current interval by new data and update its approximation error with Givens rotations
+				interval.addNewDataPoint(givensCoeffs, data.col(interval.rightBound + 1));
+
 				// Pruning strategy A: discard potential segments which can never be part of an optimal partitioning
-				if (rightBound > 1 && currentRightBound < rightBound
-					&& optimalEnergies[interval.leftBound - 1] + interval.approxError >= optimalEnergies[currentRightBound])
+				if (const auto currentRightBound = interval.rightBound;
+					optimalEnergies[currentRightBound] <= optimalEnergies[interval.leftBound - 1] + interval.approxError)
 				{
 					return true;
-				}
-				else
-				{
-					// Extend current interval by new data and update its approximation error with Givens rotations
-					interval.addNewDataPoint(givensCoeffs, data.col(interval.rightBound + 1));
 				}
 			}
 			return false;
@@ -86,8 +83,8 @@ namespace homs
 		void updateOptimalEnergyForRightBound(std::vector<double>& optimalEnergies, std::vector<int>& jumpsTracker, const ApproxIntervalBase& interval, const int dataRightBound, const double jumpPenalty)
 		{
 			// Check if the current interval yields an improved energy value
-			const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 1] + jumpPenalty + interval.approxError;
-			if (optimalEnergyCandidate <= optimalEnergies[dataRightBound])
+			if (const auto optimalEnergyCandidate = optimalEnergies[interval.leftBound - 1] + jumpPenalty + interval.approxError;
+				optimalEnergyCandidate <= optimalEnergies[dataRightBound])
 			{
 				optimalEnergies[dataRightBound] = optimalEnergyCandidate;
 				jumpsTracker[dataRightBound] = interval.leftBound - 1;
@@ -97,10 +94,8 @@ namespace homs
 
 	Partitioning PcwSmoothPartitioningBase::findOptimalPartition(const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
-		const auto approximationErrorsFromStart = computeOptimalEnergiesNoSegmentation(data);
-
 		// vector with optimal functional values for each discrete interval [0..r], r = 0..n-1
-		std::vector<double> optimalEnergies(m_dataLength, 0);
+		auto optimalEnergies = computeOptimalEnergiesNoSegmentation(data);
 
 		// Keep track of the optimal segment boundaries by storing the optimal last left segment boundary for each 
 		// subdata on domains [0..r], r = 0..n-1
@@ -108,13 +103,10 @@ namespace homs
 
 		// container for the candidate segments, i.e., discrete intervals
 		std::list<std::unique_ptr<ApproxIntervalBase>> segments; // note: erasing from the middle of a list is cheaper than from a vector
-		segments.push_back(createIntervalForPartitionFinding(1, data.col(1)));
 
 		for (int dataRightBound = 1; dataRightBound < m_dataLength; dataRightBound++)
 		{
-			// Init with approximation error of single-segment partition, i.e. [0..dataRightBound], best last jump = 0
-			optimalEnergies[dataRightBound] = approximationErrorsFromStart[dataRightBound];
-
+			segments.push_front(createIntervalForPartitionFinding(dataRightBound, data.col(dataRightBound)));
 			// Loop through candidate segments and find the best last jump for data[0..dataRightBound]
 			for (auto iter = segments.begin(); iter != segments.end();)
 			{
@@ -138,17 +130,12 @@ namespace homs
 					break;
 				}
 			}
-			// Add the interval with left bound = rightBound to the list of segments
-			if (dataRightBound < m_dataLength - 1)
-			{
-				segments.push_front(createIntervalForPartitionFinding(dataRightBound + 1, data.col(dataRightBound + 1)));
-			}
 		}
 
 		return Partitioning(jumpsTracker);
 	}
 
-	std::vector<std::unique_ptr<ApproxIntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionAndFillShortSegments(
+	std::vector<std::unique_ptr<ApproxIntervalBase>> PcwSmoothPartitioningBase::createIntervalsFromPartitionForComputingResult(
 		const Partitioning& partition, const int minSegmentSize, const Eigen::Map<Eigen::MatrixXd>& data, Eigen::MatrixXd& resultToBeFilled) const
 	{
 		std::vector<std::unique_ptr<ApproxIntervalBase>> Intervals;
@@ -157,15 +144,17 @@ namespace homs
 		{
 			const auto leftBound = segment.leftBound;
 			const auto rightBound = segment.rightBound;
-			const auto segmentSize = segment.size();
 
-			if (segmentSize < minSegmentSize)
+			if (const auto segmentSize = segment.size();
+				segmentSize < minSegmentSize)
 			{
 				// nothing to do for small segments
 				resultToBeFilled.middleCols(leftBound, segmentSize) = data.middleCols(leftBound, segmentSize);
-				continue;
 			}
-			Intervals.push_back(createIntervalForComputingResult(leftBound, rightBound, data));
+			else
+			{
+				Intervals.push_back(createIntervalForComputingResult(leftBound, rightBound, data));
+			}
 		};
 
 		// sort in size-ascending order
@@ -184,7 +173,7 @@ namespace homs
 
 		// Create interval objects corresponding to the segments of the partition
 		// The intervals are sorted in size-ascending order to avoid repeating identical row transformations of the system matrix
-		auto Intervals = createIntervalsFromPartitionAndFillShortSegments(partition, minSegmentSize(), data, pcwSmoothResult);
+		auto Intervals = createIntervalsFromPartitionForComputingResult(partition, minSegmentSize(), data, pcwSmoothResult);
 
 		if (Intervals.empty())
 		{

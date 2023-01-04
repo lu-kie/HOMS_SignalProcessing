@@ -22,7 +22,6 @@ namespace homs
 		const auto rowOffset = m_dataLength - m_smoothingOrder;
 		for (int row = m_dataLength; row < numRows; row++)
 		{
-
 			for (int col = 0; col < numCols; col++)
 			{
 				// aux variables for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
@@ -33,10 +32,7 @@ namespace homs
 				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(row,row)
 				auto rho = std::pow(systemMatrix(col + colOffset, 0), 2) + std::pow(systemMatrix(row, col), 2);
 				rho = std::sqrt(rho);
-				if (systemMatrix(col + colOffset, 0) < 0)
-				{
-					rho = -rho;
-				}
+
 				// store the coefficients
 				m_givensCoeffs.C(row - rowOffset, col) = systemMatrix(col + colOffset, 0) / rho;
 				m_givensCoeffs.S(row - rowOffset, col) = systemMatrix(row, col) / rho;
@@ -96,7 +92,7 @@ namespace homs
 
 		// The lower block has rows given by k-fold convolutions of the k-th order finite difference vector with itself
 		Eigen::Vector2d forwardDifferenceCoeffs(-1, 1);
-		Eigen::VectorXd kFoldFiniteDifferenceCoeffs(2);
+		Eigen::RowVectorXd kFoldFiniteDifferenceCoeffs(2);
 		kFoldFiniteDifferenceCoeffs << -1, 1;
 		for (int t = 0; t < m_smoothingOrder - 1; t++)
 		{
@@ -106,10 +102,7 @@ namespace homs
 		}
 
 		kFoldFiniteDifferenceCoeffs *= pow(m_smoothnessPenalty, m_smoothingOrder);
-		for (int r = m_dataLength; r < 2 * m_dataLength - m_smoothingOrder; r++)
-		{
-			systemMatrix.row(r) = kFoldFiniteDifferenceCoeffs;
-		}
+		systemMatrix.bottomRows(m_dataLength - m_smoothingOrder) = kFoldFiniteDifferenceCoeffs.replicate(m_dataLength - m_smoothingOrder, 1);
 		return systemMatrix;
 	}
 
@@ -127,8 +120,8 @@ namespace homs
 		const auto lowerRowBeginCol = col;
 
 		// Apply the Givens rotation to the corresponding matrix rows
-		const double c = m_givensCoeffs.C(row - rowOffset, col);
-		const double s = m_givensCoeffs.S(row - rowOffset, col);
+		const auto c = m_givensCoeffs.C(row - rowOffset, col);
+		const auto s = m_givensCoeffs.S(row - rowOffset, col);
 
 		const Eigen::MatrixXd upperMatRow = systemMatrix.block(col + colOffset, 0, 1, upperRowLength);
 		const Eigen::MatrixXd lowerMatRow = systemMatrix.block(row, lowerRowBeginCol, 1, upperRowLength);
@@ -146,25 +139,25 @@ namespace homs
 
 		// Fill segment via back substitution
 		resultToBeFilled.col(rightBound) = currData.col(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
-		for (int ii = segmentSize - 2; ii >= 0; ii--)
+		for (int i = segmentSize - 2; i >= 0; i--)
 		{
 			Eigen::VectorXd rhsSum = Eigen::VectorXd::Zero(m_numChannels);
-			for (int j = 1; j <= std::min(m_smoothingOrder, segmentSize - ii - 1); j++)
+			for (int j = 1; j <= std::min(m_smoothingOrder, segmentSize - i - 1); j++)
 			{
-				rhsSum += partialUpperTriMat(ii, j) * resultToBeFilled.col(leftBound + ii + j);
+				rhsSum += partialUpperTriMat(i, j) * resultToBeFilled.col(leftBound + i + j);
 			}
-			resultToBeFilled.col(leftBound + ii) = (currData.col(ii) - rhsSum) / partialUpperTriMat(ii, 0);
+			resultToBeFilled.col(leftBound + i) = (currData.col(i) - rhsSum) / partialUpperTriMat(i, 0);
 		}
 	}
 
 	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const
 	{
-		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty, m_numChannels));
+		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_numChannels));
 	}
 
 	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const
 	{
 
-		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));
+		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder));
 	}
 }
