@@ -137,7 +137,7 @@ namespace homs
 		systemMatrix.block(row, lowerRowBeginCol, 1, upperRowLength) = -s * upperMatRow + c * lowerMatRow;
 	}
 
-	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
+	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
 	{
 		const auto leftBound = segment->leftBound;
 		const auto rightBound = segment->rightBound;
@@ -145,24 +145,24 @@ namespace homs
 		const auto segmentSize = segment->size();
 
 		// Fill segment via back substitution
-		resultToBeFilled(rightBound) = currData(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
+		resultToBeFilled.col(rightBound) = currData.col(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
 		for (int ii = segmentSize - 2; ii >= 0; ii--)
 		{
-			double rhsSum = 0;
+			Eigen::VectorXd rhsSum = Eigen::VectorXd::Zero(m_numChannels);
 			for (int j = 1; j <= std::min(m_smoothingOrder, segmentSize - ii - 1); j++)
 			{
-				rhsSum += partialUpperTriMat(ii, j) * resultToBeFilled(leftBound + ii + j);
+				rhsSum += partialUpperTriMat(ii, j) * resultToBeFilled.col(leftBound + ii + j);
 			}
-			resultToBeFilled(leftBound + ii) = (currData(ii) - rhsSum) / partialUpperTriMat(ii, 0);
+			resultToBeFilled.col(leftBound + ii) = (currData.col(ii) - rhsSum) / partialUpperTriMat(ii, 0);
 		}
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const
 	{
-		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty));
+		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, newDataPoint, m_smoothingOrder, m_smoothnessPenalty, m_numChannels));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& fullData) const
+	std::unique_ptr<ApproxIntervalBase> PcwSmoothPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& fullData) const
 	{
 
 		return std::make_unique<ApproxIntervalSmooth>(ApproxIntervalSmooth(leftBound, rightBound, fullData, m_smoothingOrder, m_smoothnessPenalty));

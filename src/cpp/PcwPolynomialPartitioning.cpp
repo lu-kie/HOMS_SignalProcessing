@@ -74,33 +74,37 @@ namespace homs
 		systemMatrix.row(row) = -s * upperMatRow + c * lowerMatRow;
 	}
 
-	void PcwPolynomialPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
+	void PcwPolynomialPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
 	{
 		const auto leftBound = segment->leftBound;
 		const auto rightBound = segment->rightBound;
 		const auto& currData = segment->data;
 		const auto segmentSize = segment->size();
 		const Eigen::Index numRows = partialUpperTriMat.cols(); // = polynomial order
-		
-		// Compute the best fitting polynomial coefficients for the data within the segment
-		const Eigen::VectorXd polynomialCoeffs = partialUpperTriMat.topRows(numRows).triangularView<Eigen::Upper>().solve(currData.head(numRows));
 
-		// Fill the segment with the values yielded by the polynomial coefficients
-		resultToBeFilled.segment(leftBound, segmentSize).array() += polynomialCoeffs.tail(1).value();
-		Eigen::VectorXd xValues = Eigen::VectorXd::LinSpaced(segmentSize, 1, segmentSize);
-		for (int j = static_cast<int>(polynomialCoeffs.size()) - 2; j >= 0; j--)
+		// Compute the best fitting polynomial coefficients for the data within the segment
+		for (int channel = 0; channel < m_numChannels; channel++)
 		{
-			resultToBeFilled.segment(leftBound, segmentSize) += polynomialCoeffs(j) * xValues;
-			xValues.array() *= xValues.array();
+			const Eigen::VectorXd& rhs = currData.leftCols(numRows).row(channel);
+			Eigen::VectorXd polynomialCoeffs = partialUpperTriMat.topRows(numRows).triangularView<Eigen::Upper>().solve(rhs);
+
+			// Fill the segment with the values yielded by the polynomial coefficients
+			resultToBeFilled.middleCols(leftBound, segmentSize).row(channel).array() += polynomialCoeffs.tail(1).value();
+			Eigen::VectorXd xValues = Eigen::VectorXd::LinSpaced(segmentSize, 1, segmentSize);
+			for (int j = static_cast<int>(polynomialCoeffs.size()) - 2; j >= 0; j--)
+			{
+				resultToBeFilled.middleCols(leftBound, segmentSize).row(channel) += polynomialCoeffs(j) * xValues;
+				xValues.array() *= xValues.array();
+			}
 		}
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const
+	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const
 	{
-		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, newDataPoint, m_polynomialOrder));
+		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, newDataPoint, m_polynomialOrder, m_numChannels));
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const
+	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& data) const
 	{
 		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, rightBound, data, m_polynomialOrder));
 	}

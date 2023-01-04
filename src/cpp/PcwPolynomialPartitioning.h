@@ -13,11 +13,12 @@ namespace homs
 		/// @param polynomialOrder order of the polynomial on each segment
 		/// @param jumpPenalty costs for introducing new segments
 		/// @param dataLength length of incoming data
-		PcwPolynomialPartitioning(const int polynomialOrder, const double jumpPenalty, const int dataLength)
-			: PcwSmoothPartitioningBase(jumpPenalty, dataLength)
+		/// @param numChannels number of channels of incoming data
+		PcwPolynomialPartitioning(const int polynomialOrder, const double jumpPenalty, const int dataLength, const int numChannels)
+			: PcwSmoothPartitioningBase(jumpPenalty, dataLength, numChannels)
 			, m_polynomialOrder{ polynomialOrder }
 		{
-			if (m_polynomialOrder < 0)
+			if (m_polynomialOrder <= 0)
 			{
 				throw std::invalid_argument("Requested polynomial order must be > 0");
 			}
@@ -28,9 +29,9 @@ namespace homs
 		void computeGivensCoefficients();
 		Eigen::MatrixXd createSystemMatrix() const;
 		void eliminateSystemMatrixEntry(Eigen::MatrixXd& systemMatrix, int row, int col) const;
-		void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const;
-		std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const;
-		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const;
+		void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const;
+		std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const;
+		std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& data) const;
 
 		int m_polynomialOrder{ 1 }; ///< order of the piecewise polynomial partitioning and smoothing (1: constant, 2: affine linear etc.)
 

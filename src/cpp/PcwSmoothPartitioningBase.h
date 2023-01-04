@@ -10,13 +10,14 @@ namespace homs
 		/// @brief Create base partitioning object with specified jump penalty and data length
 		/// @param jumpPenalty 
 		/// @param dataLength 
-		PcwSmoothPartitioningBase(const double jumpPenalty, const int dataLength)
-			: m_dataLength{ dataLength }
-			, m_jumpPenalty{ jumpPenalty }
+		PcwSmoothPartitioningBase(const double jumpPenalty, const int dataLength, const int numChannels)
+			: m_dataLength(dataLength)
+			, m_numChannels(numChannels)
+			, m_jumpPenalty(jumpPenalty)
 		{
-			if (m_dataLength <= 0)
+			if (m_dataLength <= 0 || m_numChannels <= 0)
 			{
-				throw std::invalid_argument("Requested data length must be > 0");
+				throw std::invalid_argument("Requested data length and number of channels must be > 0");
 			}
 			if (jumpPenalty < 0)
 			{
@@ -32,7 +33,7 @@ namespace homs
 		/// @brief Apply the partitioning and the corresponding piecewise smoothing to data
 		/// @param data 
 		/// @return optimal partitioning and corresponding pcw. smoothed signal
-		std::pair<Eigen::VectorXd, Partitioning> applyToData(Eigen::VectorXd& data);
+		std::pair<Eigen::MatrixXd, Partitioning> applyToData(Eigen::MatrixXd& data);
 
 	protected:
 		/// @brief Get the smallest size of a normal partitioning's segment
@@ -50,20 +51,20 @@ namespace homs
 		/// @param leftBound left bound of the (single-point) interval
 		/// @param newDataPoint data point corresponding to left bound
 		/// @return interval object
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const double newDataPoint) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const = 0;
 
 		/// @brief Create an interval object as needed in the smooth signal reconstruction process
 		/// @param leftBound left bound of the interval
 		/// @param rightBound right bound of the interval 
 		/// @param data full data
 		/// @return interval object
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::VectorXd& data) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::MatrixXd& data) const = 0;
 
 		/// @brief Compute the best approximating smooth signal for the segment by performing back substition on the partial (full length) upper triangular system matrix
 		/// @param segment 
 		/// @param resultToBeFilled 
 		/// @param partialUpperTriMat partial upper triangular system matrix which yields the best approximating signal on the given segment
-		virtual void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::VectorXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const = 0;
+		virtual void fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const = 0;
 
 		/// @brief Eliminate an entry of the system matrix
 		/// @param systemMatrix 
@@ -74,15 +75,16 @@ namespace homs
 		/// @brief Compute the best approximation errors for data(0..r), r=1..dataLength
 		/// @param data 
 		/// @return best approximation errors
-		std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::VectorXd& data) const;
+		std::vector<double> computeOptimalEnergiesNoSegmentation(const Eigen::MatrixXd& data) const;
 
 		/// @brief Run the dynamic programming scheme to find an optimal partition of the input data
 		/// @param data 
 		/// @return optimal partition into (discrete) intervals
-		Partitioning findOptimalPartition(Eigen::VectorXd& data) const;
+		Partitioning findOptimalPartition(Eigen::MatrixXd& data) const;
 
 	protected:
 		int m_dataLength{ 0 }; ///< number of data points of incoming data
+		int m_numChannels{ 1 }; ///< number of channels of incoming data (e.g. 3 for data taken from an RGB image)
 		GivensCoefficients m_givensCoeffs{}; ///< the Givens coefficients for obtaining a QR decomposition from the underlying system matrices. They further yield the recursion coefficients for the dynamic programming scheme
 
 	private:
@@ -93,13 +95,13 @@ namespace homs
 		/// @param data 
 		/// @param resultToBeFilled 
 		/// @return vector of intervals
-		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::VectorXd& data, Eigen::VectorXd& resultToBeFilled) const;
+		std::vector<std::unique_ptr<ApproxIntervalBase>> createIntervalsFromPartitionAndFillShortSegments(const Partitioning& partition, const int minSegmentSize, const Eigen::MatrixXd& data, Eigen::MatrixXd& resultToBeFilled) const;
 
 		/// @brief Compute the best fitting piecewise smooth/polynomial result from the found optimal partition
 		/// @param partition 
 		/// @param data 
 		/// @return piecewise smooth result
-		Eigen::VectorXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, Eigen::VectorXd& data) const;
+		Eigen::MatrixXd computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, Eigen::MatrixXd& data) const;
 
 		bool m_initialized{ false }; ///< flag if object is initialized, i.e. if the Givens coefficients have been computed
 		double m_jumpPenalty{ std::numeric_limits<double>::infinity() }; ///< how much does introducing a new segment cost: large values give few segments and vice versa

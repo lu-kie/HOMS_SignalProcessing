@@ -20,7 +20,7 @@ namespace homs
 		std::reverse(segments.begin(), segments.end());
 	}
 
-	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
+	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
 	{
 		// Aux variables
 		double finiteDifferenceRowData = 0;
@@ -34,9 +34,9 @@ namespace homs
 			const auto c = givensCoeffs.C(intervalLength, j);
 			const auto s = givensCoeffs.S(intervalLength, j);
 
-			const auto pivotRowData = data(j);
-			const auto eliminatedRowData = newDataPoint;
-			data(j) = c * pivotRowData + s * eliminatedRowData;
+			const Eigen::VectorXd pivotRowData = data.col(j);
+			const Eigen::VectorXd eliminatedRowData = newDataPoint;
+			data.col(j) = c * pivotRowData + s * eliminatedRowData;
 			newDataPoint = -s * pivotRowData + c * eliminatedRowData;
 		}
 
@@ -45,7 +45,7 @@ namespace homs
 		// Update the approximation error
 		if (newIntervalLength > polynomialOrder)
 		{
-			approxError += std::pow(newDataPoint, 2);
+			approxError += newDataPoint.squaredNorm();
 		}
 
 		// Update the interval boundaries
@@ -54,7 +54,7 @@ namespace homs
 		// Update the stored interval data if necessary
 		if (newIntervalLength <= polynomialOrder)
 		{
-			data(newIntervalLength - 1) = newDataPoint;
+			data.col(newIntervalLength - 1) = newDataPoint;
 		}
 	}
 
@@ -70,16 +70,16 @@ namespace homs
 		const auto c = givensCoeffs.C(row, col);
 		const auto s = givensCoeffs.S(row, col);
 
-		const auto pivotRowData = data(col);
-		const auto eliminatedRowData = data(row);
-		data(col) = c * pivotRowData + s * eliminatedRowData;
-		data(row) = -s * pivotRowData + c * eliminatedRowData;
+		const Eigen::VectorXd pivotRowData = data.col(col);
+		const Eigen::VectorXd eliminatedRowData = data.col(row);
+		data.col(col) = c * pivotRowData + s * eliminatedRowData;
+		data.col(row) = -s * pivotRowData + c * eliminatedRowData;
 	}
 
-	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, double newDataPoint)
+	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
 	{
 		// Aux variables
-		double finiteDifferenceRowData = 0;
+		Eigen::VectorXd finiteDifferenceRowData = Eigen::VectorXd::Zero(newDataPoint.rows());
 		const auto intervalLength = size();
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
@@ -88,10 +88,10 @@ namespace homs
 		{
 			for (int j = 0; j <= smoothingOrder; j++)
 			{
-				double pivotRowData;
+				Eigen::VectorXd pivotRowData;
 				if (j != smoothingOrder)
 				{
-					pivotRowData = data(j);
+					pivotRowData = data.col(j);
 				}
 				else
 				{
@@ -106,7 +106,7 @@ namespace homs
 
 				if (j != smoothingOrder)
 				{
-					data(j) = c * pivotRowData + s * eliminatedRowData;
+					data.col(j) = c * pivotRowData + s * eliminatedRowData;
 				}
 				else
 				{
@@ -116,7 +116,7 @@ namespace homs
 				finiteDifferenceRowData = -s * pivotRowData + c * eliminatedRowData;
 			}
 			// Update the approximation error
-			approxError += std::pow(finiteDifferenceRowData, 2);
+			approxError += finiteDifferenceRowData.squaredNorm();
 		}
 
 		// Update the interval length
@@ -125,9 +125,9 @@ namespace homs
 		// Update the stored interval data if necessary
 		if (smoothingOrder > 1)
 		{
-			data.head(smoothingOrder - 1) = data.segment(1, smoothingOrder - 1);
+			data.leftCols(smoothingOrder - 1) = data.middleCols(1, smoothingOrder - 1);
 		}
-		data(smoothingOrder - 1) = newDataPoint;
+		data.col(smoothingOrder - 1) = newDataPoint;
 	}
 
 	void ApproxIntervalSmooth::applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col)
@@ -141,13 +141,13 @@ namespace homs
 		const auto eliminatedRowDataIndexOffset = fullSignalLength - size();
 		const auto colOffset = row - fullSignalLength;
 
-		const double pivotRowData = data(col + colOffset);
-		const double eliminatedRowData = data(row - eliminatedRowDataIndexOffset);
+		const Eigen::VectorXd pivotRowData = data.col(col + colOffset);
+		const Eigen::VectorXd eliminatedRowData = data.col(row - eliminatedRowDataIndexOffset);
 
 		// Apply Givens rotation to data vector
 		const auto c = givensCoeffs.C(row - rowOffset, col);
 		const auto s = givensCoeffs.S(row - rowOffset, col);
-		data(col + colOffset) = c * pivotRowData + s * eliminatedRowData;
-		data(row - eliminatedRowDataIndexOffset) = -s * pivotRowData + c * eliminatedRowData;
+		data.col(col + colOffset) = c * pivotRowData + s * eliminatedRowData;
+		data.col(row - eliminatedRowDataIndexOffset) = -s * pivotRowData + c * eliminatedRowData;
 	}
 }
