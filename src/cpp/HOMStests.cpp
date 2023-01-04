@@ -204,7 +204,6 @@ namespace homs
 		}
 	}
 
-
 	TEST(ApproxIntervalSmooth, applyGivensRotationToData)
 	{
 		// fit third order discrete spline to parabolic data: expect perfect fit
@@ -276,7 +275,6 @@ namespace homs
 			EXPECT_TRUE(expected.isApprox(smoothedData, 1e-12));
 		}
 	}
-
 
 	TEST(PcwPolynomialPartitioning, createSystemMatrix)
 	{
@@ -421,7 +419,6 @@ namespace homs
 			EXPECT_NEAR(linearApproximationErrors[5], expectedApproxErr, 1e-3);
 		}
 	}
-
 
 	TEST(PcwPolynomialPartitioning, findOptimalPartition)
 	{
@@ -576,7 +573,6 @@ namespace homs
 		}
 	}
 
-
 	TEST(PcwPolynomialPartitioning, pcwPolynomialResult)
 	{
 		{
@@ -649,13 +645,13 @@ namespace homs
 			EXPECT_TRUE(expectedResult.isApprox(pcwPolynomialResult, 1e-4));
 		}
 	}
-	/*
+
 	TEST(PcwSmoothPartitioning, createSystemMatrix)
 	{
 		const int dataLength = 10;
 		const double smoothnessPenalty = 2;
 		const int smoothingOrder = 3;
-		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, 1);
 		const auto sysMatrix = pcwPartImpl.createSystemMatrix();
 
 		// check size
@@ -683,8 +679,10 @@ namespace homs
 	TEST(PcwSmoothPartitioning, computeGivensCoefficients)
 	{
 		const int dataLength = 5;
+		const int numChannels = 4;
 		const int smoothingOrder = 2;
 		const double smoothnessPenalty = 2;
+
 		Eigen::MatrixXd fullSystemMatrix(2 * dataLength - smoothingOrder, dataLength);
 		fullSystemMatrix <<
 			1, 0, 0, 0, 0,
@@ -696,7 +694,7 @@ namespace homs
 			0, 4, -8, 4, 0,
 			0, 0, 4, -8, 4;
 
-		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		auto pcwPartImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, numChannels);
 		pcwPartImpl.initialize();
 		const auto givensCoeffs = pcwPartImpl.m_givensCoeffs;
 
@@ -739,11 +737,17 @@ namespace homs
 		const int smoothingOrder = 3;
 		const auto smoothnessPenalty = 4;
 		const int dataLength = 6;
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
+		const int numChannels = 5;
+		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, numChannels);
 		pcwImpl.initialize();
-
-		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
-		data << 0, 1, 4, 9, 16, 25;
+		Eigen::MatrixXd data
+		{
+			{0, 1, 4, 9, 16, 25},
+			{1, 4, 9, 16, 25, 36},
+			{0, 1, 2, 3, 4, 5},
+			{5, 5, 5, 5, 5, 5},
+			{0, -1, -4, -9, -16, -25},
+		};
 
 		// discrete third order smoothing spline for parabolic data -> expect only zero optimal energies
 		const auto approximationErrors = pcwImpl.computeOptimalEnergiesNoSegmentation(data);
@@ -755,69 +759,92 @@ namespace homs
 
 	TEST(PcwSmoothPartitioning, findOptimalPartition)
 	{
-		int dataLength = 10;
-		const int smoothingOrder = 3;
-		auto smoothnessPenalty = 20;
-
-		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
-		data << 0, 1, 4, 9, 16, -4, -9, -16, -25, -36;
-		auto dummyPcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength);
-		dummyPcwImpl.initialize();
-		const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
-
-		for (const double& jumpPenalty : { 1.0,10.0,50.0,202.0,203.0,250.0 })
 		{
-			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
+			const int dataLength = 10;
+			const int numChannels = 5;
+			const int smoothingOrder = 3;
+			const int smoothnessPenalty = 20;
+
+			Eigen::MatrixXd data
+			{
+				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
+				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
+				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
+				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36},
+				{0, 1, 4, 9, 16, -4, -9, -16, -25, -36}
+			};
+			auto dummyPcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, dataLength, numChannels);
+			dummyPcwImpl.initialize();
+			const auto noJumpEnergy = dummyPcwImpl.computeOptimalEnergiesNoSegmentation(data)[dataLength - 1];
+
+			for (const double& jumpPenalty : { 1.0, 10.0, 50.0,noJumpEnergy - 0.5, noJumpEnergy + 0.5, 2 * noJumpEnergy })
+			{
+				auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
+				pcwImpl.initialize();
+				const auto foundPartition = pcwImpl.findOptimalPartition(data);
+
+				if (jumpPenalty < noJumpEnergy)
+				{
+					// two segments are optimal
+					EXPECT_EQ(foundPartition.size(), 2);
+					EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 4));
+					EXPECT_EQ(foundPartition.segments.at(1), Segment(5, 9));
+				}
+				else
+				{
+					// single segment is optimal
+					EXPECT_EQ(foundPartition.size(), 1);
+					EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 9));
+				}
+			}
+		}
+		{
+			const int dataLength = 10;
+			const int numChannels = 5;
+			const int smoothingOrder = 3;
+			const double smoothnessPenalty = 20;
+			// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
+			Eigen::MatrixXd data
+			{
+				{1, -1, 1, -1, 1, -1, 1, -1, 1, -1},
+				{1, -1, 1, -1, 1, -1, 1, -1, 1, -1},
+				{1, -1, 1, -1, 1, -1, 1, -1, 1, -1},
+				{1, -1, 1, -1, 1, -1, 1, -1, 1, -1},
+				{1, -1, 1, -1, 1, -1, 1, -1, 1, -1}
+			};
+			double jumpPenalty = 1e-8;
+			auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
 			pcwImpl.initialize();
 			const auto foundPartition = pcwImpl.findOptimalPartition(data);
 
-			if (jumpPenalty < noJumpEnergy)
+			EXPECT_EQ(foundPartition.size(), 4);
+
+			int sumSegmentLengths = 0;
+			for (const auto& segment : foundPartition.segments)
 			{
-				// two segments are optimal
-				EXPECT_EQ(foundPartition.size(), 2);
-				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 4));
-				EXPECT_EQ(foundPartition.segments.at(1), Segment(5, 9));
+				const auto segmentLength = segment.size();
+				EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
+				sumSegmentLengths += segmentLength;
 			}
-			else
+			EXPECT_EQ(sumSegmentLengths, dataLength);
 			{
-				// single segment is optimal
-				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, 9));
-			}
-		}
+				// only one segment for quadratic data
+				const int dataLength = 500;
+				const int numChannels = 1;
+				Eigen::MatrixXd quadraticData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
+				quadraticData.transposeInPlace();
 
-		// segments of size three are optimal for near-zero jumpPenalty and pcw. quadratic
-		data << 1, -1, 1, -1, 1, -1, 1, -1, 1, -1;
-		double jumpPenalty = 1e-8;
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
-		pcwImpl.initialize();
-		auto foundPartition = pcwImpl.findOptimalPartition(data);
-
-		EXPECT_EQ(foundPartition.size(), 4);
-
-		int sumSegmentLengths = 0;
-		for (const auto& segment : foundPartition.segments)
-		{
-			const auto segmentLength = segment.size();
-			EXPECT_TRUE(segmentLength == 1 || segmentLength == 3);
-			sumSegmentLengths += segmentLength;
-		}
-		EXPECT_EQ(sumSegmentLengths, dataLength);
-
-		// only one segment for quadratic data
-		dataLength = 500;
-		Eigen::VectorXd quadraticData = 150 * Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength).cwiseProduct(Eigen::VectorXd::LinSpaced(dataLength, 1, dataLength));
-
-		for (const double& jumpPenalty : { 0.1,1.0,10.0,100.0,1000.0 })
-		{
-			for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
-			{
-				pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength);
-				pcwImpl.initialize();
-				auto errs = pcwImpl.computeOptimalEnergiesNoSegmentation(quadraticData);
-				auto foundPartition = pcwImpl.findOptimalPartition(quadraticData);
-				EXPECT_EQ(foundPartition.size(), 1);
-				EXPECT_EQ(foundPartition.segments.at(0), Segment(0, dataLength - 1));
+				for (const double& jumpPenalty : { 0.1,1.0,10.0,100.0,1000.0 })
+				{
+					for (const double& smoothnessPenalty : { 0.01,0.1,1.0,10.0 })
+					{
+						pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, jumpPenalty, dataLength, numChannels);
+						pcwImpl.initialize();
+						const auto foundPartition = pcwImpl.findOptimalPartition(quadraticData);
+						EXPECT_EQ(foundPartition.size(), 1);
+						EXPECT_EQ(foundPartition.segments.at(0), Segment(0, dataLength - 1));
+					}
+				}
 			}
 		}
 	}
@@ -825,23 +852,30 @@ namespace homs
 	TEST(PcwSmoothPartitioning, pcwSmoothResult)
 	{
 		// piecewise quadratic, perfect fit for third order smoothness
-		int dataLength = 15;
-		Eigen::VectorXd data = Eigen::VectorXd::Zero(dataLength);
-		data << 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50;
-
-		int smoothingOrder = 3;
+		const int dataLength = 15;
+		const int numChannels = 5;
+		const int smoothingOrder = 3;
 		const auto smoothnessPenalty = 1;
+		Eigen::MatrixXd data
+		{
+			{ 0, 1, 4, 9, 16, 25, -2, -8, -18, -32, -50, -72, -98, 100, 50 },
+			{ -2, -8, -18, -32, -50, -72, 0, 1, 4, 9, 16, 25, 36, 50, 100 },
+			{ 0, 2, 8, 18, 32, 50, -2, -8, -18, -32, -50, -72, -98, 100, 50 },
+			{ 0, 1, 4, 9, 16, 25, -4, -16, -36, -64, -100, -144, -196, 50, 100 },
+			{ 0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196 }
+		};
 
-		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength);
+		auto pcwImpl = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 0.1, dataLength, numChannels);
 		auto [result, partition] = pcwImpl.applyToData(data);
 
 		Partitioning expectedPartition;
 		expectedPartition.segments.push_back(Segment(0, 5));
 		expectedPartition.segments.push_back(Segment(6, 12));
 		expectedPartition.segments.push_back(Segment(13, 14));
-		Eigen::VectorXd expectedResult = data;
+		Eigen::MatrixXd expectedResult = data;
 
-		EXPECT_EQ(dataLength, static_cast<int>(result.size()));
+		EXPECT_EQ(dataLength, static_cast<int>(result.cols()));
+		EXPECT_EQ(numChannels, static_cast<int>(result.rows()));
 		EXPECT_TRUE(data.isApprox(result, 1e-8));
 
 		EXPECT_EQ(partition.size(), expectedPartition.size());
@@ -849,5 +883,4 @@ namespace homs
 		EXPECT_EQ(partition.segments.at(1), expectedPartition.segments.at(1));
 		EXPECT_EQ(partition.segments.at(2), expectedPartition.segments.at(2));
 	}
-	*/
 }
