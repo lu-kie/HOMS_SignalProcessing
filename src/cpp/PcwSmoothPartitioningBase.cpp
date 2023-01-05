@@ -16,7 +16,7 @@ namespace homs
 
 	std::pair<Eigen::MatrixXd, Partitioning> PcwSmoothPartitioningBase::applyToData(const Eigen::Map<Eigen::MatrixXd>& data)
 	{
-		if (static_cast<int>(data.cols()) != m_dataLength)
+		if (static_cast<int>(data.cols()) != m_eqsPerPoint * m_dataLength)
 		{
 			throw std::invalid_argument("Input data length must fit implementation's data length");
 		}
@@ -147,7 +147,7 @@ namespace homs
 				segmentSize < minSegmentSize)
 			{
 				// nothing to do for small segments
-				resultToBeFilled.middleCols(leftBound, segmentSize) = data.middleCols(leftBound, segmentSize);
+				resultToBeFilled.middleCols(leftBound, m_eqsPerPoint * segmentSize) = data.middleCols(leftBound, m_eqsPerPoint * segmentSize);
 			}
 			else
 			{
@@ -167,7 +167,7 @@ namespace homs
 
 	Eigen::MatrixXd PcwSmoothPartitioningBase::computePcwSmoothedSignalFromPartitioning(const Partitioning& partition, const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
-		Eigen::MatrixXd pcwSmoothResult = Eigen::MatrixXd::Zero(m_numChannels, m_dataLength);
+		Eigen::MatrixXd pcwSmoothResult = Eigen::MatrixXd::Zero(m_numChannels, m_eqsPerPoint * m_dataLength);
 
 		// Create interval objects corresponding to the segments of the partition
 		// The intervals are sorted in size-ascending order to avoid repeating identical row transformations of the system matrix
@@ -208,7 +208,7 @@ namespace homs
 				auto currInterval = (*beginOfUnfinishedSegments).get();
 
 				if (const auto currIntervalSize = currInterval->size();
-					currIntervalSize != row + 1)
+					m_eqsPerPoint * currIntervalSize != (row + 1))
 				{
 					// None of the unfinished intervals has the currently processed data length
 					break;

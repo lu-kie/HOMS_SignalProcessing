@@ -9,9 +9,6 @@ namespace homs
 
 	void PcwPolynomialPartitioning::computeGivensCoefficients()
 	{
-		m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_polynomialOrder);
-		m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_polynomialOrder);
-
 		// Compute and store the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
 		auto systemMatrix = createSystemMatrix();
 		const auto numRows = static_cast<int>(systemMatrix.rows());

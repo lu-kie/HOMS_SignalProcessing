@@ -9,9 +9,6 @@ namespace homs
 
 	void PcwSmoothPartitioning::computeGivensCoefficients()
 	{
-		m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
-		m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
-
 		// Compute the coefficients of the Givens rotations to compute a QR decomposition of the systemMatrix.
 		// Save them in C and S
 		auto systemMatrix = createSystemMatrix();

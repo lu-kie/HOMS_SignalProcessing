@@ -23,6 +23,8 @@ namespace homs
 			{
 				throw std::invalid_argument("Requested smoothing order and smoothness penalty must be > 0");
 			}
+			m_givensCoeffs.C = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
+			m_givensCoeffs.S = Eigen::MatrixXd::Zero(m_dataLength, m_smoothingOrder + 1);
 		}
 
 	private:

@@ -103,6 +103,7 @@ namespace homs
 		const int m_dataLength{ 0 }; ///< number of data points of incoming data
 		const int m_numChannels{ 1 }; ///< number of channels of incoming data (e.g. 3 for data taken from an RGB image)
 		GivensCoefficients m_givensCoeffs{}; ///< the Givens coefficients for obtaining a QR decomposition from the underlying system matrices. They further yield the recursion coefficients for the dynamic programming scheme
+		int m_eqsPerPoint{ 1 }; ///< number of upper equations (block size) per data point
 
 	private:
 
