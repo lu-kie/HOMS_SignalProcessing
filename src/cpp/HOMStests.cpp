@@ -10,30 +10,30 @@ namespace homs
 	{
 		{
 			// fit quadratic polynomial to parabolic data: expect zero approximation error
-			const int leftBound = 2;
+			const int leftBound = 0;
 			const int numChannels = 5;
-			const Eigen::VectorXd dataPoint{ {0,36,0,0,36 } };
+			const Eigen::MatrixXd fullData
+			{
+				{0, 1, 4, 9, 16, 25},
+				{36, 25, 16, 9, 4, 1},
+				{0, -1, -4, -9, -16, -25},
+				{0, 1, 4, 9, 16, 25},
+				{36, 25, 16, 9, 4, 1}
+			};
+
 			const int polynomialOrder = 3;
 			const int fullDataLength = 6;
 
-			auto quadraticRegressionInterval = ApproxIntervalPolynomial(leftBound, dataPoint, polynomialOrder, numChannels);
+			auto quadraticRegressionInterval = ApproxIntervalPolynomial(leftBound, fullData, polynomialOrder, numChannels);
 			EXPECT_EQ(quadraticRegressionInterval.size(), 1);
 
 			auto dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, fullDataLength, numChannels);
 			dummyGivensProvider.initialize();
 			const auto quadraticGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
 
-			Eigen::MatrixXd newDataPoints
+			while (quadraticRegressionInterval.size() < fullDataLength)
 			{
-				{1, 4, 9, 16, 25},
-				{25, 16, 9, 4, 1},
-				{-1, -4, -9, -16, -25},
-				{1, 4, 9, 16, 25},
-				{25, 16, 9, 4, 1}
-			};
-			for (const auto& newDataPoint : newDataPoints.colwise())
-			{
-				quadraticRegressionInterval.addNewDataPoint(quadraticGivensCoeffs, newDataPoint);
+				quadraticRegressionInterval.addNewDataPoint(quadraticGivensCoeffs, fullData);
 				EXPECT_NEAR(quadraticRegressionInterval.approxError, 0, 1e-12);
 			}
 			EXPECT_EQ(quadraticRegressionInterval.size(), 6);
@@ -45,23 +45,24 @@ namespace homs
 			{
 				const int polynomialOrder = 2;
 				const int leftBound = 2;
-				const int fullDataLength = 6;
-				const Eigen::VectorXd dataPoint = Eigen::VectorXd::Zero(numChannels);
-				auto linearRegressionInterval = ApproxIntervalPolynomial(leftBound, dataPoint, polynomialOrder, numChannels);
+				const int fullDataLength = 8;
+				Eigen::RowVectorXd dataRow{ {100, 100, 0, 1, 4, 9, 16, 25 } };
+				Eigen::MatrixXd fullData = dataRow.replicate(numChannels, 1);
+				auto linearRegressionInterval = ApproxIntervalPolynomial(leftBound, fullData, polynomialOrder, numChannels);
 
 				auto dummyGivensProvider = PcwPolynomialPartitioning(polynomialOrder, 1, fullDataLength, numChannels);
 				dummyGivensProvider.initialize();
 				const auto linearGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
 
-				for (const double newDataPointChannelWise : {1, 4, 9, 16, 25})
+				while (linearRegressionInterval.size() < fullDataLength - leftBound)
 				{
-					linearRegressionInterval.addNewDataPoint(linearGivensCoeffs, newDataPointChannelWise * Eigen::VectorXd::Ones(numChannels));
+					linearRegressionInterval.addNewDataPoint(linearGivensCoeffs, fullData);
 				}
 				double expectedApproxError = std::pow(3.33, 2) + std::pow(1 - 1.67, 2) + std::pow(4 - 6.67, 2)
 					+ std::pow(9 - 11.67, 2) + std::pow(16 - 16.67, 2) + std::pow(25 - 21.67, 2);
 				expectedApproxError *= numChannels;
 				EXPECT_NEAR(linearRegressionInterval.approxError, expectedApproxError, 1e-3);
-				EXPECT_EQ(linearRegressionInterval.size(), fullDataLength);
+				EXPECT_EQ(linearRegressionInterval.size(), fullDataLength - leftBound);
 			}
 		}
 	}
@@ -72,24 +73,26 @@ namespace homs
 		for (int numChannels = 1; numChannels <= 10; numChannels++)
 		{
 			const int leftBound = 2;
-			const Eigen::VectorXd dataPoint = Eigen::VectorXd::Zero(numChannels);
 			const int smoothingOrder = 3;
 			const auto smoothnessPenalty = 3;
-			const int fullDataLength = 6;
+			const int fullDataLength = 8;
 
-			auto thirdOrderSplineInterval = ApproxIntervalSmooth(leftBound, dataPoint, smoothingOrder, numChannels);
+			Eigen::RowVectorXd dataRow{ {100, 100, 0, 1, 4, 9, 16, 25 } };
+			Eigen::MatrixXd fullData = dataRow.replicate(numChannels, 1);
+
+			auto thirdOrderSplineInterval = ApproxIntervalSmooth(leftBound, fullData, smoothingOrder, numChannels);
 
 			EXPECT_EQ(thirdOrderSplineInterval.size(), 1);
 
 			auto dummyGivensProvider = PcwSmoothPartitioning(smoothingOrder, smoothnessPenalty, 1, fullDataLength, numChannels);
 			dummyGivensProvider.initialize();
 			const auto thirdOrderSplineGivensCoeffs = dummyGivensProvider.m_givensCoeffs;
-			for (const double newDataPointChannelWise : {1, 4, 9, 16, 25})
+			while (thirdOrderSplineInterval.size() < fullDataLength - leftBound)
 			{
-				thirdOrderSplineInterval.addNewDataPoint(thirdOrderSplineGivensCoeffs, newDataPointChannelWise * Eigen::VectorXd::Ones(numChannels));
+				thirdOrderSplineInterval.addNewDataPoint(thirdOrderSplineGivensCoeffs, fullData);
 				EXPECT_NEAR(thirdOrderSplineInterval.approxError, 0, 1e-12);
 			}
-			EXPECT_EQ(thirdOrderSplineInterval.size(), fullDataLength);
+			EXPECT_EQ(thirdOrderSplineInterval.size(), fullDataLength - leftBound);
 		}
 	}
 

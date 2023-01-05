@@ -60,16 +60,16 @@ namespace homs
 
 		/// @brief Create a new interval object as needed in the dynamic programming scheme in findOptimalPartition
 		/// @param leftBound left bound of the (single-point) interval
-		/// @param newDataPoint data point corresponding to left bound
+		/// @param data full data
 		/// @return interval object
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForPartitionFinding(const int leftBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const = 0;
 
 		/// @brief Create an interval object as needed in the smooth signal reconstruction process
 		/// @param leftBound left bound of the interval
 		/// @param rightBound right bound of the interval 
 		/// @param data full data
 		/// @return interval object
-		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& data) const = 0;
+		virtual std::unique_ptr<ApproxIntervalBase> createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const = 0;
 
 		/// @brief Compute the best approximating smooth signal for the segment by performing back substition on the partial (full length) upper triangular system matrix
 		/// @param segment 

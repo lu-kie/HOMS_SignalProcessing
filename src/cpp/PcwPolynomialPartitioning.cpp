@@ -83,9 +83,9 @@ namespace homs
 		resultToBeFilled.middleCols(leftBound, segmentSize) = polynomialCoeffs * segmentSystemMatrix;
 	}
 
-	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const
+	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const
 	{
-		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, newDataPoint, m_polynomialOrder, m_numChannels));
+		return std::make_unique<ApproxIntervalPolynomial>(ApproxIntervalPolynomial(leftBound, fullData, m_polynomialOrder, m_numChannels));
 	}
 
 	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForComputingResult(const int leftBound, const int rightBound, const Eigen::Map<Eigen::MatrixXd>& fullData) const

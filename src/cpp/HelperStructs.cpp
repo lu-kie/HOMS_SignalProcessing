@@ -20,11 +20,11 @@ namespace homs
 		std::reverse(segments.begin(), segments.end());
 	}
 
-	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
+	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, const Eigen::MatrixXd& fullData)
 	{
 		// Aux variables
 		const auto intervalLength = size();
-
+		Eigen::VectorXd newDataPoint = fullData.col(rightBound + 1);
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
 		for (int col = 0; col < std::min(polynomialOrder, intervalLength); col++)
@@ -73,8 +73,9 @@ namespace homs
 		data.col(row) = -s * pivotRowData + c * eliminatedRowData;
 	}
 
-	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
+	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, const Eigen::MatrixXd& fullData)
 	{
+		Eigen::VectorXd newDataPoint = fullData.col(rightBound + 1);
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
 		if (const auto intervalLength = size();

@@ -48,10 +48,10 @@ namespace homs
 	{
 		std::vector<double> approximationErrorsFromStart(m_dataLength, 0);
 
-		auto intervalFromStart = createIntervalForPartitionFinding(0, data.col(0));
+		auto intervalFromStart = createIntervalForPartitionFinding(0, data);
 		for (int rightBound = 1; rightBound < m_dataLength; rightBound++)
 		{
-			intervalFromStart->addNewDataPoint(m_givensCoeffs, data.col(rightBound));
+			intervalFromStart->addNewDataPoint(m_givensCoeffs, data);
 			approximationErrorsFromStart[rightBound] = intervalFromStart->approxError;
 		}
 
@@ -67,7 +67,7 @@ namespace homs
 			while (interval.rightBound < rightBound)
 			{
 				// Extend current interval by new data and update its approximation error with Givens rotations
-				interval.addNewDataPoint(givensCoeffs, data.col(interval.rightBound + 1));
+				interval.addNewDataPoint(givensCoeffs, data);
 
 				// Pruning strategy A: discard potential segments which can never be part of an optimal partitioning
 				if (const auto currentRightBound = interval.rightBound;
@@ -105,7 +105,7 @@ namespace homs
 
 		for (int dataRightBound = 1; dataRightBound < m_dataLength; dataRightBound++)
 		{
-			segments.push_front(createIntervalForPartitionFinding(dataRightBound, data.col(dataRightBound)));
+			segments.push_front(createIntervalForPartitionFinding(dataRightBound, data));
 			// Loop through candidate segments and find the best last jump for data[0..dataRightBound]
 			for (auto iter = segments.begin(); iter != segments.end();)
 			{

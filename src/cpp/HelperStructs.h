@@ -70,11 +70,11 @@ namespace homs
 
 		/// @brief Constructor for finding an optimal partition
 		/// @param leftBound 
-		/// @param dataPoint 
+		/// @param fullData
 		/// @param storedDataLength 
 		/// @param numChannels
 		/// @param regularization type of regularization in the interval
-		ApproxIntervalBase(const int leftBound, const Eigen::VectorXd& dataPoint, const int storedDataLength, const int numChannels, const PcwRegularizationType regularization)
+		ApproxIntervalBase(const int leftBound, const Eigen::MatrixXd& fullData, const int storedDataLength, const int numChannels, const PcwRegularizationType regularization)
 			: leftBound(leftBound)
 			, rightBound(leftBound)
 			, data(Eigen::MatrixXd::Zero(numChannels, storedDataLength))
@@ -82,10 +82,10 @@ namespace homs
 			switch (regularization)
 			{
 			case PcwRegularizationType::pcwPolynomial:
-				data.col(0) = dataPoint;
+				data.col(0) = fullData.col(leftBound);
 				break;
 			case PcwRegularizationType::pcwSmooth:
-				data.col(storedDataLength - 1) = dataPoint;
+				data.col(storedDataLength - 1) = fullData.col(leftBound);
 				break;
 			default:
 				throw std::invalid_argument("Unsupported pcw regularization type");
@@ -97,10 +97,10 @@ namespace homs
 		int size() const { return rightBound - leftBound + 1; };
 
 		/// @brief Append data point to the interval and update the corresp. approximation error. 
-		/// The interval is enlarged by one element.
+		/// The interval is enlarged by one element and the correct data points are taken from the full data.
 		/// @param givensCoeffs 
-		/// @param newDataPoint 
-		virtual void addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint) = 0;
+		/// @param fullData
+		virtual void addNewDataPoint(const GivensCoefficients& givensCoeffs, const Eigen::MatrixXd& fullData) = 0;
 
 		/// @brief Update associated data i.e. sparse Givens rotate it (for pcw. smoothed signal reconstruction)
 		/// @param givensCoeffs Givens coefficients needed for the rotation
@@ -118,11 +118,11 @@ namespace homs
 	{
 		/// @brief Constructor of a polynomial interval: single data point
 		/// @param leftBound 
-		/// @param dataPoint 
+		/// @param fullData
 		/// @param polynomialOrder 
 		/// @param numChannels
-		ApproxIntervalPolynomial(const int leftBound, const Eigen::VectorXd& dataPoint, const int polynomialOrder, const int numChannels)
-			: ApproxIntervalBase(leftBound, dataPoint, polynomialOrder, numChannels, PcwRegularizationType::pcwPolynomial)
+		ApproxIntervalPolynomial(const int leftBound, const Eigen::MatrixXd& fullData, const int polynomialOrder, const int numChannels)
+			: ApproxIntervalBase(leftBound, fullData, polynomialOrder, numChannels, PcwRegularizationType::pcwPolynomial)
 			, polynomialOrder(polynomialOrder)
 		{}
 
@@ -136,7 +136,7 @@ namespace homs
 			, polynomialOrder(polynomialOrder)
 		{}
 
-		void addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint);
+		void addNewDataPoint(const GivensCoefficients& givensCoeffs, const Eigen::MatrixXd& fullData);
 		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
 
 		int polynomialOrder{ 1 }; ///< order of the polynomial on the interval (1: constant, 2: linear etc.)
@@ -146,11 +146,11 @@ namespace homs
 	{
 		/// @brief Constructor of a smooth interval: single data point
 		/// @param leftBound 
-		/// @param dataPoint 
+		/// @param fullData 
 		/// @param smoothingOrder 
 		/// @param numChannels
-		ApproxIntervalSmooth(const int leftBound, const Eigen::VectorXd& dataPoint, const int smoothingOrder, const int numChannels)
-			: ApproxIntervalBase(leftBound, dataPoint, smoothingOrder, numChannels, PcwRegularizationType::pcwSmooth)
+		ApproxIntervalSmooth(const int leftBound, const Eigen::MatrixXd& fullData, const int smoothingOrder, const int numChannels)
+			: ApproxIntervalBase(leftBound, fullData, smoothingOrder, numChannels, PcwRegularizationType::pcwSmooth)
 			, smoothingOrder(smoothingOrder)
 		{}
 
@@ -169,7 +169,7 @@ namespace homs
 			data.leftCols(size()) = fullData.middleCols(leftBound, size());
 		}
 
-		void addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint);
+		void addNewDataPoint(const GivensCoefficients& givensCoeffs, const Eigen::MatrixXd& fullData);
 		void applyGivensRotationToData(const GivensCoefficients& givensCoeffs, const int row, const int col);
 
 		int smoothingOrder{ 1 }; ///< order of discrete smoothness on the interval (1: first forward differences, 2: second order differences etc.)
