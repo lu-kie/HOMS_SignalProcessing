@@ -24,10 +24,8 @@ namespace homs
 		{
 			for (int col = 0; col < numCols; col++)
 			{
-				// aux variables for compensating systemMatrix being stored sparsely (see member fct createSystemMatrix)
+				// compensating for systemMatrix being stored sparsely (see member fct createSystemMatrix)
 				const auto colOffset = row - m_dataLength;
-				const auto upperRowLength = m_smoothingOrder - col + 1;
-				const auto lowerRowBeginCol = col;
 
 				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(row,row)
 				auto rho = std::pow(systemMatrix(col + colOffset, 0), 2) + std::pow(systemMatrix(row, col), 2);
@@ -50,8 +48,8 @@ namespace homs
 		/// @return convolution of x and y
 		Eigen::VectorXd convolveVectors(const Eigen::VectorXd& x, const Eigen::VectorXd& y)
 		{
-			const auto sizeX = x.size();
-			const auto sizeY = y.size();
+			const auto sizeX = static_cast<int>(x.size());
+			const auto sizeY = static_cast<int>(y.size());
 			Eigen::VectorXd conv = Eigen::VectorXd::Zero(sizeX + sizeY - 1);
 			for (int j = 0; j < sizeY; j++)
 			{
@@ -133,20 +131,18 @@ namespace homs
 	void PcwSmoothPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
 	{
 		const auto leftBound = segment->leftBound;
-		const auto rightBound = segment->rightBound;
-		const auto& currData = segment->data;
+		const auto& givensRotatedSegmentData = segment->data;
 		const auto segmentSize = segment->size();
 
 		// Fill segment via back substitution
-		resultToBeFilled.col(rightBound) = currData.col(segmentSize - 1) / partialUpperTriMat(segmentSize - 1, 0);
-		for (int i = segmentSize - 2; i >= 0; i--)
+		for (int i = segmentSize - 1; i >= 0; i--)
 		{
 			Eigen::VectorXd rhsSum = Eigen::VectorXd::Zero(m_numChannels);
 			for (int j = 1; j <= std::min(m_smoothingOrder, segmentSize - i - 1); j++)
 			{
 				rhsSum += partialUpperTriMat(i, j) * resultToBeFilled.col(leftBound + i + j);
 			}
-			resultToBeFilled.col(leftBound + i) = (currData.col(i) - rhsSum) / partialUpperTriMat(i, 0);
+			resultToBeFilled.col(leftBound + i) = (givensRotatedSegmentData.col(i) - rhsSum) / partialUpperTriMat(i, 0);
 		}
 	}
 

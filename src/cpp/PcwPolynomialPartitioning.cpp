@@ -24,10 +24,6 @@ namespace homs
 				// Determine Givens coefficients for eliminating systemMatrix(row,col) with Pivot element systemMatrix(col,col)
 				auto rho = std::pow(systemMatrix(col, col), 2) + std::pow(systemMatrix(row, col), 2);
 				rho = std::sqrt(rho);
-				if (systemMatrix(col, col) < 0)
-				{
-					rho = -rho;
-				}
 				m_givensCoeffs.C(row, col) = systemMatrix(col, col) / rho;
 				m_givensCoeffs.S(row, col) = systemMatrix(row, col) / rho;
 				// update the system matrix accordingly, i.e. apply the Givens rotation to the corresponding matrix rows
@@ -76,26 +72,15 @@ namespace homs
 	void PcwPolynomialPartitioning::fillSegmentFromPartialUpperTriangularSystemMatrix(ApproxIntervalBase* segment, Eigen::MatrixXd& resultToBeFilled, const Eigen::MatrixXd& partialUpperTriMat) const
 	{
 		const auto leftBound = segment->leftBound;
-		const auto rightBound = segment->rightBound;
-		const auto& currData = segment->data;
+		const auto& givensRotatedSegmentData = segment->data;
 		const auto segmentSize = segment->size();
-		const Eigen::Index numRows = partialUpperTriMat.cols(); // = polynomial order
 
 		// Compute the best fitting polynomial coefficients for the data within the segment
-		for (int channel = 0; channel < m_numChannels; channel++)
-		{
-			const Eigen::VectorXd& rhs = currData.leftCols(numRows).row(channel);
-			Eigen::VectorXd polynomialCoeffs = partialUpperTriMat.topRows(numRows).triangularView<Eigen::Upper>().solve(rhs);
-
-			// Fill the segment with the values yielded by the polynomial coefficients
-			resultToBeFilled.middleCols(leftBound, segmentSize).row(channel).array() += polynomialCoeffs.tail(1).value();
-			Eigen::VectorXd xValues = Eigen::VectorXd::LinSpaced(segmentSize, 1, segmentSize);
-			for (int j = static_cast<int>(polynomialCoeffs.size()) - 2; j >= 0; j--)
-			{
-				resultToBeFilled.middleCols(leftBound, segmentSize).row(channel) += polynomialCoeffs(j) * xValues;
-				xValues.array() *= xValues.array();
-			}
-		}
+		const Eigen::MatrixXd& rhs = givensRotatedSegmentData.leftCols(m_polynomialOrder).transpose();
+		const Eigen::MatrixXd polynomialCoeffs = partialUpperTriMat.topRows(m_polynomialOrder).triangularView<Eigen::Upper>().solve(rhs).transpose();
+		// Fill the segment with the induced signal values
+		const auto segmentSystemMatrix = Eigen::Map<const Eigen::MatrixXd>(m_fullSystemMatrixTr.leftCols(segmentSize).data(), m_polynomialOrder, segmentSize);
+		resultToBeFilled.middleCols(leftBound, segmentSize) = polynomialCoeffs * segmentSystemMatrix;
 	}
 
 	std::unique_ptr<ApproxIntervalBase> PcwPolynomialPartitioning::createIntervalForPartitionFinding(const int leftBound, const Eigen::VectorXd&& newDataPoint) const

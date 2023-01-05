@@ -47,13 +47,12 @@ namespace homs
 	std::vector<double> PcwSmoothPartitioningBase::computeOptimalEnergiesNoSegmentation(const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
 		std::vector<double> approximationErrorsFromStart(m_dataLength, 0);
-		approximationErrorsFromStart.resize(m_dataLength);
 
 		auto intervalFromStart = createIntervalForPartitionFinding(0, data.col(0));
-		for (int idx = 1; idx < m_dataLength; idx++)
+		for (int rightBound = 1; rightBound < m_dataLength; rightBound++)
 		{
-			intervalFromStart->addNewDataPoint(m_givensCoeffs, data.col(idx));
-			approximationErrorsFromStart[idx] = intervalFromStart->approxError;
+			intervalFromStart->addNewDataPoint(m_givensCoeffs, data.col(rightBound));
+			approximationErrorsFromStart[rightBound] = intervalFromStart->approxError;
 		}
 
 		return approximationErrorsFromStart;
@@ -94,7 +93,7 @@ namespace homs
 
 	Partitioning PcwSmoothPartitioningBase::findOptimalPartition(const Eigen::Map<Eigen::MatrixXd>& data) const
 	{
-		// vector with optimal functional values for each discrete interval [0..r], r = 0..n-1
+		// container for storing the optimal functional values for each discrete interval [0..r], r = 0..n-1
 		auto optimalEnergies = computeOptimalEnergiesNoSegmentation(data);
 
 		// Keep track of the optimal segment boundaries by storing the optimal last left segment boundary for each 
@@ -119,15 +118,14 @@ namespace homs
 				}
 				else
 				{
+					updateOptimalEnergyForRightBound(optimalEnergies, jumpsTracker, currInterval, dataRightBound, m_jumpPenalty);
+
+					// Pruning strategy B: omit unnecessary computations of approximation errors
+					if (currInterval.approxError + m_jumpPenalty > optimalEnergies[dataRightBound])
+					{
+						break;
+					}
 					iter++;
-				}
-
-				updateOptimalEnergyForRightBound(optimalEnergies, jumpsTracker, currInterval, dataRightBound, m_jumpPenalty);
-
-				// Pruning strategy B: omit unnecessary computations of approximation errors
-				if (currInterval.approxError + m_jumpPenalty > optimalEnergies[dataRightBound])
-				{
-					break;
 				}
 			}
 		}
@@ -177,21 +175,22 @@ namespace homs
 
 		if (Intervals.empty())
 		{
-			// no reconstruction needed
+			// only short segments, result already reconstructed
 			return pcwSmoothResult;
 		}
 
-		// Solve the linear equation systems corresponding to each interval
-		// Declare sparse system matrix of underlying least squares problem
+		// Solve the linear equation systems corresponding to each interval for all intervals at once
 		auto systemMatrix = createSystemMatrix();
 
 		// The iterator knowing which intervals have to be considered (i.e. which interval lengths)
 		auto beginOfUnfinishedSegments = Intervals.begin();
 
 		// Matrix elimination (i: row, j: column)
-		for (int row = 0; row < systemMatrix.rows(); row++)
+		const auto numRows = static_cast<int>(systemMatrix.rows());
+		const auto numCols = static_cast<int>(systemMatrix.cols());
+		for (int row = 0; row < numRows; row++)
 		{
-			for (int col = 0; col < systemMatrix.cols(); col++)
+			for (int col = 0; col < numCols; col++)
 			{
 				eliminateSystemMatrixEntry(systemMatrix, row, col);
 
@@ -211,13 +210,13 @@ namespace homs
 				if (const auto currIntervalSize = currInterval->size();
 					currIntervalSize != row + 1)
 				{
-					// None of the unfinished intervals has the current length
+					// None of the unfinished intervals has the currently processed data length
 					break;
 				}
 				fillSegmentFromPartialUpperTriangularSystemMatrix(currInterval, pcwSmoothResult, systemMatrix);
 			}
 
-			// Stop when all segments are finished
+			// All segments are finished
 			if (beginOfUnfinishedSegments == Intervals.end())
 			{
 				return pcwSmoothResult;

@@ -23,7 +23,6 @@ namespace homs
 	void ApproxIntervalPolynomial::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
 	{
 		// Aux variables
-		double finiteDifferenceRowData = 0;
 		const auto intervalLength = size();
 
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
@@ -40,21 +39,18 @@ namespace homs
 			newDataPoint = -s * pivotRowData + c * eliminatedRowData;
 		}
 
-
 		// Update the interval boundaries
 		rightBound++;
 
-		const auto newIntervalLength = intervalLength + 1;
-
-		// Update the approximation error
-		if (newIntervalLength > polynomialOrder)
+		if (const auto newIntervalLength = size();
+			newIntervalLength > polynomialOrder)
 		{
+			// Update the approximation error
 			approxError += newDataPoint.squaredNorm();
 		}
-
-		// Update the stored interval data if necessary
-		if (newIntervalLength <= polynomialOrder)
+		else
 		{
+			// Update the stored interval data if necessary
 			data.col(newIntervalLength - 1) = newDataPoint;
 		}
 	}
@@ -79,11 +75,10 @@ namespace homs
 
 	void ApproxIntervalSmooth::addNewDataPoint(const GivensCoefficients& givensCoeffs, Eigen::VectorXd&& newDataPoint)
 	{
-		const auto intervalLength = size();
-
 		// Apply the Givens rotation which eliminates the new row of the (virtual) system matrix
 		// to the interval data to update the approximation error
-		if (intervalLength >= smoothingOrder)
+		if (const auto intervalLength = size();
+			intervalLength >= smoothingOrder)
 		{
 			Eigen::VectorXd eliminatedRowData = Eigen::VectorXd::Zero(newDataPoint.rows());
 			for (int j = 0; j < smoothingOrder; j++)
@@ -99,7 +94,7 @@ namespace homs
 
 			const auto c = givensCoeffs.C(intervalLength, smoothingOrder);
 			const auto s = givensCoeffs.S(intervalLength, smoothingOrder);
-			
+
 			const Eigen::VectorXd pivotRowData = newDataPoint;
 			newDataPoint = c * pivotRowData + s * eliminatedRowData;
 			eliminatedRowData = -s * pivotRowData + c * eliminatedRowData;
